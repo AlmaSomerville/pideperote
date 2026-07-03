@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { sendWhatsApp, orderMessage } from "@/lib/whatsapp";
 import { effectiveOpen, nextOpeningText } from "@/lib/hours";
+import { availability, candidateSlots, slotCapacity, SLOT_MS } from "@/lib/slots";
 
 export const dynamic = "force-dynamic";
 
@@ -12,26 +13,41 @@ function makeCode() {
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { restaurantId, name, phone, address = "", notes = "", type, lines } = body;
+    const { restaurantId, name, phone, address = "", notes = "", type, lines, scheduledFor } = body;
     if (!restaurantId || !name?.trim() || !phone?.trim() || !Array.isArray(lines) || !lines.length)
       return NextResponse.json({ error: "Faltan datos del pedido." }, { status: 400 });
 
     const [rest] = await sql`SELECT * FROM restaurants WHERE id = ${restaurantId} AND active = TRUE`;
     if (!rest) return NextResponse.json({ error: "Restaurante no encontrado." }, { status: 404 });
-    if (!effectiveOpen(rest)) {
-      const next = nextOpeningText(rest);
-      return NextResponse.json({ error: `El restaurante está cerrado.${next ? " " + next + "." : ""}` }, { status: 400 });
-    }
-
-    if (rest.max_orders_per_hour > 0) {
-      const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM orders
+    // ¿Pedido programado o "lo antes posible"?
+    let slotTs = null;
+    if (scheduledFor) {
+      slotTs = Number(scheduledFor);
+      const valid = Number.isFinite(slotTs) && slotTs % SLOT_MS === 0 && candidateSlots(rest).includes(slotTs);
+      if (!valid)
+        return NextResponse.json({ error: "Esa hora ya no está disponible. Elige otra." }, { status: 400 });
+      const cap = slotCapacity(rest);
+      const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM orders
         WHERE restaurant_id = ${rest.id} AND status != 'rechazado'
-        AND created_at > NOW() - INTERVAL '60 minutes'`;
-      if (count >= rest.max_orders_per_hour)
+        AND scheduled_for = ${new Date(slotTs).toISOString()}`;
+      if (n >= cap)
+        return NextResponse.json({ error: "Esa hora se acaba de llenar. Elige otra." }, { status: 409 });
+    } else {
+      if (!effectiveOpen(rest)) {
+        const next = nextOpeningText(rest);
         return NextResponse.json(
-          { error: "El restaurante está a tope ahora mismo y no acepta más pedidos por un rato. Prueba en unos minutos." },
-          { status: 429 }
+          { error: `El restaurante está cerrado ahora.${next ? " " + next + "." : ""}`, closed: true },
+          { status: 400 }
         );
+      }
+      if (rest.max_orders_per_hour > 0) {
+        const { asapOk } = await availability(rest);
+        if (!asapOk)
+          return NextResponse.json(
+            { error: "El restaurante está a tope ahora mismo.", busy: true },
+            { status: 429 }
+          );
+      }
     }
 
     const orderType = type === "recogida" && rest.pickup ? "recogida" : "reparto";
@@ -85,9 +101,10 @@ export async function POST(req) {
     for (let i = 0; i < 5 && !order; i++) {
       try {
         [order] = await sql`INSERT INTO orders
-          (code, restaurant_id, customer_name, phone, address, notes, type, total_cents, delivery_fee_cents)
+          (code, restaurant_id, customer_name, phone, address, notes, type, total_cents, delivery_fee_cents, scheduled_for)
           VALUES (${makeCode()}, ${rest.id}, ${name.trim()}, ${phone.trim()}, ${address.trim()},
-                  ${notes.trim().slice(0, 500)}, ${orderType}, ${total}, ${feeCents})
+                  ${notes.trim().slice(0, 500)}, ${orderType}, ${total}, ${feeCents},
+                  ${slotTs ? new Date(slotTs).toISOString() : null})
           RETURNING *`;
       } catch (e) {
         if (!String(e.message).includes("duplicate")) throw e;

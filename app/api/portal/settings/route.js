@@ -7,6 +7,18 @@ export const dynamic = "force-dynamic";
 // PATCH { rid, ...campos } — ajustes del restaurante.
 // El logo llega como data URL (base64) y se guarda en la BD; límite 200KB.
 export async function PATCH(req) {
+  try {
+    return await doPatch(req);
+  } catch (e) {
+    console.error("settings error:", e);
+    const hint = String(e.message || "").includes("does not exist")
+      ? " Parece que falta ejecutar la migración: visita /api/setup con tu contraseña de admin."
+      : "";
+    return NextResponse.json({ error: "No se pudo guardar." + hint }, { status: 500 });
+  }
+}
+
+async function doPatch(req) {
   const b = await req.json().catch(() => ({}));
   const rid = Number(b.rid);
   if (!rid || !requireRestaurant(rid))

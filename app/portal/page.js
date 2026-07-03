@@ -210,7 +210,14 @@ function Orders({ rid }) {
       {orders.map((o) => (
         <div key={o.id} className={`panel order-card ${o.status === "nuevo" ? "nuevo" : ""}`} style={{ borderLeftColor: o.status === "nuevo" ? "var(--cta)" : "var(--line)" }}>
           <div className="order-head">
-            <span className="order-code">{o.code} <span className="tag">{STATUS_LABEL[o.status]}</span></span>
+            <span className="order-code">
+              {o.code} <span className="tag">{STATUS_LABEL[o.status]}</span>
+              {o.scheduled_for && (
+                <span className="tag" style={{ marginLeft: 6, background: "var(--green)", color: "#fff" }}>
+                  ⏰ {new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", hour: "2-digit", minute: "2-digit" }).format(new Date(o.scheduled_for))}
+                </span>
+              )}
+            </span>
             <span className="order-time">{new Date(o.created_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
           </div>
           <div className="order-items">
@@ -491,14 +498,18 @@ function Settings({ data, reload }) {
       body.whatsapp = form.whatsapp;
       body.portalPassword = form.portalPassword;
     }
-    const res = await fetch("/api/portal/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const d = await res.json();
-    setMsg(res.ok ? "Guardado ✓" : d.error);
-    if (res.ok) reload();
+    try {
+      const res = await fetch("/api/portal/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const d = await res.json().catch(() => ({}));
+      setMsg(res.ok ? "Guardado ✓" : d.error || `No se pudo guardar (error ${res.status}).`);
+      if (res.ok) reload();
+    } catch {
+      setMsg("No se pudo guardar: fallo de conexión.");
+    }
   }
 
   return (

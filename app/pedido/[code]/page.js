@@ -67,6 +67,12 @@ export default function OrderPage({ params }) {
         <div className="big-icon">{rejected ? "😕" : order.status === "entregado" ? "✅" : "🍔"}</div>
         <h1>{rejected ? "Pedido rechazado" : "¡Pedido enviado!"}</h1>
         <div className="code-chip">{order.code}</div>
+        {order.scheduled_for && (
+          <p className="status-now" style={{ marginBottom: 4 }}>
+            ⏰ Programado para las{" "}
+            {new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", hour: "2-digit", minute: "2-digit" }).format(new Date(order.scheduled_for))}
+          </p>
+        )}
         <p className="status-line">Estado actual:</p>
         <p className="status-now">{STATUS_LABEL[order.status] || order.status}</p>
         {!rejected && order.status === "nuevo" && (

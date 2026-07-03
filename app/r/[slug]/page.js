@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { sql } from "@/lib/db";
-import { effectiveOpen, hoursText } from "@/lib/hours";
+import { effectiveOpen, hoursText, nextOpeningText } from "@/lib/hours";
 import MenuClient from "./MenuClient";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,10 @@ export default async function RestaurantPage({ params }) {
     FROM restaurants WHERE slug = ${params.slug} AND active = TRUE`;
   if (!rest) notFound();
 
-  rest.is_open = effectiveOpen(rest);
+  const open = effectiveOpen(rest);
+  rest.preorder = !open && !!nextOpeningText(rest); // cerrado por horario => se puede programar
+  rest.opensAt = open ? "" : nextOpeningText(rest);
+  rest.is_open = open;
   rest.hours = hoursText(rest);
   delete rest.schedule;
 

@@ -12,6 +12,9 @@ export default function MenuClient({ restaurant, menu }) {
   const [view, setView] = useState("menu"); // menu | cart | checkout
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
+  const [when, setWhen] = useState(restaurant.is_open ? "asap" : "slot");
+  const [slots, setSlots] = useState(null);
+  const [slot, setSlot] = useState("");
   const [form, setForm] = useState({
     type: restaurant.delivery ? "reparto" : "recogida",
     name: "",
@@ -44,12 +47,26 @@ export default function MenuClient({ restaurant, menu }) {
     );
   }
 
+  async function loadSlots(autopick) {
+    try {
+      const res = await fetch(`/api/slots?rid=${restaurant.id}`, { cache: "no-store" });
+      const d = await res.json();
+      setSlots(d.slots || []);
+      if ((autopick || !restaurant.is_open) && d.slots?.length && !slot) setSlot(String(d.slots[0].t));
+      return d;
+    } catch {
+      setSlots([]);
+      return { slots: [] };
+    }
+  }
+
   async function submitOrder() {
     setErr("");
     if (!form.name.trim() || form.phone.replace(/\D/g, "").length < 9)
       return setErr("Pon tu nombre y un teléfono válido.");
     if (form.type === "reparto" && !form.address.trim())
       return setErr("Falta la dirección de entrega.");
+    if (when === "slot" && !slot) return setErr("Elige una hora para tu pedido.");
     setSending(true);
     try {
       const res = await fetch("/api/order", {
@@ -57,6 +74,7 @@ export default function MenuClient({ restaurant, menu }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           restaurantId: restaurant.id,
+          scheduledFor: when === "slot" ? Number(slot) : undefined,
           ...form,
           lines: cart.map((l) => ({
             itemId: l.itemId,
@@ -66,7 +84,18 @@ export default function MenuClient({ restaurant, menu }) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No se pudo enviar el pedido.");
+      if (!res.ok) {
+        if (data.busy) {
+          const d = await loadSlots(true);
+          setWhen("slot");
+          setSending(false);
+          setErr(d.slots?.length
+            ? `Están a tope ahora mismo — el primer hueco disponible es a las ${d.slots[0].label}. Elige hora y vuelve a enviar.`
+            : "Están a tope ahora mismo. Prueba en unos minutos.");
+          return;
+        }
+        throw new Error(data.error || "No se pudo enviar el pedido.");
+      }
       router.push(`/pedido/${data.code}`);
     } catch (e) {
       setErr(e.message);
@@ -88,7 +117,7 @@ export default function MenuClient({ restaurant, menu }) {
       >
         <h1>{restaurant.name}</h1>
         <p>
-          {restaurant.is_open ? "Abierto ahora" : "Cerrado ahora"}
+          {restaurant.is_open ? "Abierto ahora" : restaurant.preorder ? `Cerrado ahora · puedes pedir para luego (${restaurant.opensAt.toLowerCase()})` : "Cerrado ahora"}
           {restaurant.hours ? ` · ${restaurant.hours}` : ""}
           {restaurant.delivery_fee_cents > 0 && ` · Reparto ${eur(restaurant.delivery_fee_cents)}`}
           {restaurant.min_order_cents > 0 && ` · Mínimo ${eur(restaurant.min_order_cents)}`}
@@ -105,7 +134,7 @@ export default function MenuClient({ restaurant, menu }) {
                   <button
                     key={item.id}
                     className="item-row"
-                    disabled={!item.available || !restaurant.is_open}
+                    disabled={!item.available || (!restaurant.is_open && !restaurant.preorder)}
                     onClick={() =>
                       item.groups.length
                         ? setSheet(item)
@@ -123,7 +152,7 @@ export default function MenuClient({ restaurant, menu }) {
               </section>
             ) : null
           )}
-          {!restaurant.is_open && (
+          {!restaurant.is_open && !restaurant.preorder && (
             <p className="muted" style={{ textAlign: "center", marginTop: 20 }}>
               Este restaurante está cerrado ahora mismo. Vuelve en su horario de apertura.
             </p>
@@ -161,7 +190,8 @@ export default function MenuClient({ restaurant, menu }) {
           )}
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             <button className="btn secondary" onClick={() => setView("menu")}>Seguir pidiendo</button>
-            <button className="btn" disabled={belowMin || !cart.length} onClick={() => setView("checkout")}>
+            <button className="btn" disabled={belowMin || !cart.length}
+              onClick={() => { setView("checkout"); if (!slots) loadSlots(false); }}>
               Continuar
             </button>
           </div>
@@ -170,6 +200,34 @@ export default function MenuClient({ restaurant, menu }) {
 
       {view === "checkout" && (
         <div className="panel" style={{ marginTop: 16 }}>
+          <h3>¿Para cuándo?</h3>
+          {restaurant.is_open ? (
+            <div className="pill-tabs">
+              <button className={when === "asap" ? "on" : ""} onClick={() => setWhen("asap")}>⚡ Lo antes posible</button>
+              <button className={when === "slot" ? "on" : ""} onClick={() => { setWhen("slot"); if (!slots) loadSlots(true); }}>⏰ Programar</button>
+            </div>
+          ) : (
+            <p className="muted" style={{ marginTop: 0 }}>
+              El restaurante está cerrado ahora — tu pedido quedará programado para cuando abra.
+            </p>
+          )}
+          {when === "slot" && (
+            <div className="field">
+              <label>Hora del pedido</label>
+              {slots === null ? (
+                <p className="muted">Cargando horas...</p>
+              ) : slots.length === 0 ? (
+                <p className="err">No hay horas disponibles ahora mismo.</p>
+              ) : (
+                <select value={slot} onChange={(e) => setSlot(e.target.value)}>
+                  {slots.map((s) => (
+                    <option key={s.t} value={String(s.t)}>{s.label}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
           <h3>Tus datos</h3>
           <div className="pill-tabs">
             {restaurant.delivery && (

@@ -21,13 +21,16 @@ function Portal() {
   const [needLogin, setNeedLogin] = useState(false);
   const [tab, setTab] = useState("pedidos");
 
-  const load = useCallback(async () => {
+const load = useCallback(async () => {
     const res = await fetch(`/api/portal/data${ridParam ? `?rid=${ridParam}` : ""}`);
     if (res.status === 401 || res.status === 403) return setNeedLogin(true);
-    if (res.ok) {
-      setData(await res.json());
-      setNeedLogin(false);
+    if (!res.ok) {
+      // Admin sin restaurante elegido → al panel de admin
+      location.href = "/admin";
+      return;
     }
+    setData(await res.json());
+    setNeedLogin(false);
   }, [ridParam]);
 
   useEffect(() => { load(); }, [load]);

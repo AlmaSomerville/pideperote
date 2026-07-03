@@ -12,8 +12,8 @@ export default function MenuClient({ restaurant, menu }) {
   const [view, setView] = useState("menu"); // menu | cart | checkout
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
-  const [when, setWhen] = useState(restaurant.is_open ? "asap" : "slot");
-  const [slots, setSlots] = useState(null);
+  const [when, setWhen] = useState("asap"); // asap | first | pick
+  const [avail, setAvail] = useState(null); // { asapOk, slots }
   const [slot, setSlot] = useState("");
   const [form, setForm] = useState({
     type: restaurant.delivery ? "reparto" : "recogida",
@@ -47,16 +47,22 @@ export default function MenuClient({ restaurant, menu }) {
     );
   }
 
-  async function loadSlots(autopick) {
+  async function loadAvail() {
     try {
       const res = await fetch(`/api/slots?rid=${restaurant.id}`, { cache: "no-store" });
       const d = await res.json();
-      setSlots(d.slots || []);
-      if ((autopick || !restaurant.is_open) && d.slots?.length && !slot) setSlot(String(d.slots[0].t));
-      return d;
+      const a = { asapOk: !!d.asapOk, slots: d.slots || [] };
+      setAvail(a);
+      // Si "lo antes posible" no cabe, el primer hueco pasa a ser lo antes posible
+      if (!a.asapOk && a.slots.length) {
+        setWhen((w) => (w === "asap" ? "first" : w));
+        setSlot((sl) => sl || String(a.slots[0].t));
+      }
+      return a;
     } catch {
-      setSlots([]);
-      return { slots: [] };
+      const a = { asapOk: restaurant.is_open, slots: [] };
+      setAvail(a);
+      return a;
     }
   }
 
@@ -66,7 +72,7 @@ export default function MenuClient({ restaurant, menu }) {
       return setErr("Pon tu nombre y un teléfono válido.");
     if (form.type === "reparto" && !form.address.trim())
       return setErr("Falta la dirección de entrega.");
-    if (when === "slot" && !slot) return setErr("Elige una hora para tu pedido.");
+    if (when !== "asap" && !slot) return setErr("Elige una hora para tu pedido.");
     setSending(true);
     try {
       const res = await fetch("/api/order", {
@@ -74,7 +80,7 @@ export default function MenuClient({ restaurant, menu }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           restaurantId: restaurant.id,
-          scheduledFor: when === "slot" ? Number(slot) : undefined,
+          scheduledFor: when === "asap" ? undefined : Number(slot),
           ...form,
           lines: cart.map((l) => ({
             itemId: l.itemId,
@@ -85,13 +91,16 @@ export default function MenuClient({ restaurant, menu }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data.busy) {
-          const d = await loadSlots(true);
-          setWhen("slot");
+        if (data.busy || data.closed) {
+          const a = await loadAvail();
           setSending(false);
-          setErr(d.slots?.length
-            ? `Están a tope ahora mismo — el primer hueco disponible es a las ${d.slots[0].label}. Elige hora y vuelve a enviar.`
-            : "Están a tope ahora mismo. Prueba en unos minutos.");
+          if (a.slots.length) {
+            setWhen("first");
+            setSlot(String(a.slots[0].t));
+            setErr(`${data.busy ? "Están a tope ahora mismo" : "El restaurante está cerrado ahora"} — tu pedido irá para las ${a.slots[0].label}. Dale a "Hacer pedido" para confirmarlo, o elige otra hora.`);
+          } else {
+            setErr(data.error || "No se puede pedir ahora mismo.");
+          }
           return;
         }
         throw new Error(data.error || "No se pudo enviar el pedido.");
@@ -191,7 +200,7 @@ export default function MenuClient({ restaurant, menu }) {
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             <button className="btn secondary" onClick={() => setView("menu")}>Seguir pidiendo</button>
             <button className="btn" disabled={belowMin || !cart.length}
-              onClick={() => { setView("checkout"); if (!slots) loadSlots(false); }}>
+              onClick={() => { setView("checkout"); loadAvail(); }}>
               Continuar
             </button>
           </div>
@@ -201,30 +210,40 @@ export default function MenuClient({ restaurant, menu }) {
       {view === "checkout" && (
         <div className="panel" style={{ marginTop: 16 }}>
           <h3>¿Para cuándo?</h3>
-          {restaurant.is_open ? (
+          {avail === null ? (
+            <p className="muted">Comprobando disponibilidad...</p>
+          ) : avail.asapOk ? (
             <div className="pill-tabs">
               <button className={when === "asap" ? "on" : ""} onClick={() => setWhen("asap")}>⚡ Lo antes posible</button>
-              <button className={when === "slot" ? "on" : ""} onClick={() => { setWhen("slot"); if (!slots) loadSlots(true); }}>⏰ Programar</button>
+              <button className={when !== "asap" ? "on" : ""}
+                onClick={() => { setWhen("pick"); if (!slot && avail.slots.length) setSlot(String(avail.slots[0].t)); }}>
+                ⏰ Programar
+              </button>
             </div>
+          ) : avail.slots.length ? (
+            <>
+              <p className="muted" style={{ marginTop: 0 }}>
+                {restaurant.is_open ? "Están a tope ahora mismo" : "El restaurante está cerrado ahora"} — te damos el primer hueco:
+              </p>
+              <div className="pill-tabs">
+                <button className={when === "first" ? "on" : ""}
+                  onClick={() => { setWhen("first"); setSlot(String(avail.slots[0].t)); }}>
+                  ⚡ Lo antes posible · {avail.slots[0].label}
+                </button>
+                <button className={when === "pick" ? "on" : ""} onClick={() => setWhen("pick")}>⏰ Otra hora</button>
+              </div>
+            </>
           ) : (
-            <p className="muted" style={{ marginTop: 0 }}>
-              El restaurante está cerrado ahora — tu pedido quedará programado para cuando abra.
-            </p>
+            <p className="err">Ahora mismo no se puede pedir a este restaurante.</p>
           )}
-          {when === "slot" && (
+          {when === "pick" && avail?.slots?.length > 0 && (
             <div className="field">
               <label>Hora del pedido</label>
-              {slots === null ? (
-                <p className="muted">Cargando horas...</p>
-              ) : slots.length === 0 ? (
-                <p className="err">No hay horas disponibles ahora mismo.</p>
-              ) : (
-                <select value={slot} onChange={(e) => setSlot(e.target.value)}>
-                  {slots.map((s) => (
-                    <option key={s.t} value={String(s.t)}>{s.label}</option>
-                  ))}
-                </select>
-              )}
+              <select value={slot} onChange={(e) => setSlot(e.target.value)}>
+                {avail.slots.map((s) => (
+                  <option key={s.t} value={String(s.t)}>{s.label}</option>
+                ))}
+              </select>
             </div>
           )}
 

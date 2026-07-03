@@ -29,6 +29,27 @@ export async function PATCH(req) {
     logo = l;
   }
 
+  let cover = cur.cover;
+  if (b.cover !== undefined) {
+    const c = String(b.cover);
+    if (c && !c.startsWith("data:image/"))
+      return NextResponse.json({ error: "Foto de portada no válida" }, { status: 400 });
+    if (c.length > 600000)
+      return NextResponse.json({ error: "Foto de portada demasiado grande. Usa una imagen más pequeña." }, { status: 400 });
+    cover = c;
+  }
+
+  let schedule = cur.schedule;
+  if (b.schedule !== undefined) {
+    const s = String(b.schedule).slice(0, 2000);
+    if (s) {
+      try { JSON.parse(s); } catch {
+        return NextResponse.json({ error: "Horario no válido" }, { status: 400 });
+      }
+    }
+    schedule = s;
+  }
+
   let color = t(b.color, cur.color, 9);
   if (!/^#[0-9a-fA-F]{3,8}$/.test(color)) color = cur.color;
 
@@ -40,6 +61,8 @@ export async function PATCH(req) {
   await sql`UPDATE restaurants SET
     name = ${t(b.name, cur.name)},
     logo = ${logo},
+    cover = ${cover},
+    schedule = ${schedule},
     color = ${color},
     hours = ${t(b.hours, cur.hours)},
     is_open = ${bool(b.isOpen, cur.is_open)},

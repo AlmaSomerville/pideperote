@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { sendWhatsApp, orderMessage } from "@/lib/whatsapp";
+import { effectiveOpen } from "@/lib/hours";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export async function POST(req) {
 
     const [rest] = await sql`SELECT * FROM restaurants WHERE id = ${restaurantId} AND active = TRUE`;
     if (!rest) return NextResponse.json({ error: "Restaurante no encontrado." }, { status: 404 });
-    if (!rest.is_open) return NextResponse.json({ error: "El restaurante está cerrado." }, { status: 400 });
+    if (!effectiveOpen(rest)) return NextResponse.json({ error: "El restaurante está cerrado." }, { status: 400 });
 
     const orderType = type === "recogida" && rest.pickup ? "recogida" : "reparto";
     if (orderType === "reparto" && !rest.delivery)

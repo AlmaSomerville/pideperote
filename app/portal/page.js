@@ -21,7 +21,7 @@ function Portal() {
   const [needLogin, setNeedLogin] = useState(false);
   const [tab, setTab] = useState("pedidos");
 
-const load = useCallback(async () => {
+  const load = useCallback(async () => {
     const res = await fetch(`/api/portal/data${ridParam ? `?rid=${ridParam}` : ""}`);
     if (res.status === 401 || res.status === 403) return setNeedLogin(true);
     if (!res.ok) {
@@ -395,11 +395,45 @@ function GroupEditor({ group, options, rpc }) {
   );
 }
 
+function QRSection({ slug, name }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => { setUrl(`${window.location.origin}/r/${slug}`); }, [slug]);
+  if (!url) return null;
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=2&data=${encodeURIComponent(url)}`;
+
+  async function download() {
+    try {
+      const blob = await (await fetch(qrSrc)).blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `qr-${slug}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      window.open(qrSrc, "_blank");
+    }
+  }
+
+  return (
+    <div className="qr-box">
+      <img src={qrSrc} alt={`Código QR de ${name}`} />
+      <div>
+        <p className="muted" style={{ margin: "0 0 10px", wordBreak: "break-all" }}>{url}</p>
+        <button className="btn small green" onClick={download}>Descargar QR (PNG)</button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- AJUSTES ---------------- */
 
 function Settings({ data, reload }) {
   const r = data.restaurant;
   const isAdmin = data.role === "admin";
+  const emptySched = { mon: "", tue: "", wed: "", thu: "", fri: "", sat: "", sun: "" };
+  let initialSched = emptySched;
+  try { initialSched = { ...emptySched, ...(r.schedule ? JSON.parse(r.schedule) : {}) }; } catch {}
+  const [sched, setSched] = useState(initialSched);
   const [form, setForm] = useState({
     name: r.name,
     color: r.color,
@@ -412,27 +446,29 @@ function Settings({ data, reload }) {
     portalPassword: r.portal_password || "",
   });
   const [logo, setLogo] = useState(undefined);
+  const [cover, setCover] = useState(undefined);
   const [msg, setMsg] = useState("");
 
-  function pickLogo(e) {
+  function pickImage(e, maxPx, quality, setter) {
     const file = e.target.files?.[0];
     if (!file) return;
     const img = new Image();
     const reader = new FileReader();
     reader.onload = () => {
       img.onload = () => {
-        // Redimensionar a 256px para que quepa en la BD
         const canvas = document.createElement("canvas");
-        const s = Math.min(256 / img.width, 256 / img.height, 1);
+        const s = Math.min(maxPx / img.width, maxPx / img.height, 1);
         canvas.width = Math.round(img.width * s);
         canvas.height = Math.round(img.height * s);
         canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-        setLogo(canvas.toDataURL("image/jpeg", 0.85));
+        setter(canvas.toDataURL("image/jpeg", quality));
       };
       img.src = reader.result;
     };
     reader.readAsDataURL(file);
   }
+  const pickLogo = (e) => pickImage(e, 256, 0.85, setLogo);
+  const pickCover = (e) => pickImage(e, 1000, 0.78, setCover);
 
   async function save() {
     setMsg("");
@@ -447,6 +483,8 @@ function Settings({ data, reload }) {
       minOrderCents: toCents(form.minOrder),
     };
     if (logo !== undefined) body.logo = logo;
+    if (cover !== undefined) body.cover = cover;
+    body.schedule = Object.values(sched).some((v) => v.trim()) ? JSON.stringify(sched) : "";
     if (isAdmin) {
       body.whatsapp = form.whatsapp;
       body.portalPassword = form.portalPassword;
@@ -482,7 +520,41 @@ function Settings({ data, reload }) {
         </div>
       </div>
 
-      <div className="field"><label>Horario (texto libre que ve el cliente)</label>
+      <div className="field">
+        <label>Foto de portada (se ve en la página principal, ideal apaisada)</label>
+        <input type="file" accept="image/*" onChange={pickCover} />
+        {(cover || r.cover) && (
+          <img src={cover ?? r.cover} alt="portada" style={{ width: "100%", maxWidth: 340, borderRadius: 12, marginTop: 8, aspectRatio: "21/9", objectFit: "cover" }} />
+        )}
+      </div>
+
+      <hr className="sep" />
+      <h3 style={{ marginTop: 0 }}>Horario semanal</h3>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Formato: <b>12:00-16:00, 19:00-23:30</b> · Vacío = cerrado ese día · Los tramos nocturnos
+        tipo <b>20:00-01:30</b> también valen. Con horario puesto, el restaurante se abre y cierra
+        solo (el botón de arriba sigue mandando: si lo pones en cerrado, cierra pase lo que pase).
+      </p>
+      {[["mon","Lunes"],["tue","Martes"],["wed","Miércoles"],["thu","Jueves"],["fri","Viernes"],["sat","Sábado"],["sun","Domingo"]].map(([d, label]) => (
+        <div className="sched-row" key={d}>
+          <label>{label}</label>
+          <input
+            value={sched[d]}
+            placeholder="12:00-16:00, 19:00-23:30"
+            onChange={(e) => setSched((s) => ({ ...s, [d]: e.target.value }))}
+          />
+        </div>
+      ))}
+
+      <hr className="sep" />
+      <h3 style={{ marginTop: 0 }}>Tu código QR</h3>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Imprímelo y ponlo en la barra, la puerta o los tickets: lleva directo a tu carta.
+      </p>
+      <QRSection slug={r.slug} name={r.name} />
+
+      <hr className="sep" />
+      <div className="field"><label>Horario en texto (solo se usa si no rellenas el horario semanal)</label>
         <input value={form.hours} placeholder="Ma-Do 12:00-16:00, 19:00-23:30" onChange={(e) => setForm((f) => ({ ...f, hours: e.target.value }))} /></div>
 
       <div className="row2">

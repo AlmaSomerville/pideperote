@@ -82,7 +82,10 @@ export default function MenuClient({ restaurant, menu }) {
         </Link>
       </div>
 
-      <div className="menu-hero">
+      <div
+        className={`menu-hero ${restaurant.cover ? "with-cover" : ""}`}
+        style={restaurant.cover ? { backgroundImage: `url(${restaurant.cover})` } : undefined}
+      >
         <h1>{restaurant.name}</h1>
         <p>
           {restaurant.is_open ? "Abierto ahora" : "Cerrado ahora"}

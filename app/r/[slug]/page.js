@@ -1,13 +1,19 @@
 import { notFound } from "next/navigation";
 import { sql } from "@/lib/db";
+import { effectiveOpen, hoursText } from "@/lib/hours";
 import MenuClient from "./MenuClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function RestaurantPage({ params }) {
-  const [rest] = await sql`SELECT id, slug, name, logo, color, is_open, hours, delivery, pickup,
-    delivery_fee_cents, min_order_cents FROM restaurants WHERE slug = ${params.slug} AND active = TRUE`;
+  const [rest] = await sql`SELECT id, slug, name, logo, cover, color, is_open, hours, schedule,
+    delivery, pickup, delivery_fee_cents, min_order_cents
+    FROM restaurants WHERE slug = ${params.slug} AND active = TRUE`;
   if (!rest) notFound();
+
+  rest.is_open = effectiveOpen(rest);
+  rest.hours = hoursText(rest);
+  delete rest.schedule;
 
   const categories = await sql`SELECT id, name FROM categories WHERE restaurant_id = ${rest.id} ORDER BY sort, id`;
   const items = await sql`SELECT id, category_id, name, description, price_cents, available

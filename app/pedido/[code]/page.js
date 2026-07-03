@@ -23,7 +23,16 @@ export default function OrderPage({ params }) {
         const res = await fetch(`/api/order/${params.code}`);
         if (res.status === 404) return setNotFound(true);
         const d = await res.json();
-        if (alive) setData(d);
+        if (alive) {
+          setData(d);
+          // Guardar en "Tus pedidos" del navegador (sin cuentas)
+          try {
+            const list = JSON.parse(localStorage.getItem("pp_orders") || "[]")
+              .filter((o) => o.code !== d.order.code);
+            list.unshift({ code: d.order.code, restaurant: d.order.restaurant_name, at: d.order.created_at });
+            localStorage.setItem("pp_orders", JSON.stringify(list.slice(0, 5)));
+          } catch {}
+        }
       } catch {}
     }
     load();

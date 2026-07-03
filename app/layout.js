@@ -5,7 +5,7 @@ export const metadata = {
   description: "Pide a los restaurantes de Álora. Reparto y recogida.",
 };
 
-export const viewport = { width: "device-width", initialScale: 1, themeColor: "#3E6B34" };
+export const viewport = { width: "device-width", initialScale: 1, themeColor: "#0A544D" };
 
 export default function RootLayout({ children }) {
   return (

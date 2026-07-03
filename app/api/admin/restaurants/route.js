@@ -28,7 +28,7 @@ export async function POST(req) {
   const password = String(b.portalPassword || Math.random().toString(36).slice(2, 10));
   try {
     const [row] = await sql`INSERT INTO restaurants (slug, name, portal_password, whatsapp, color)
-      VALUES (${slug}, ${name}, ${password}, ${String(b.whatsapp || "").trim().slice(0, 20)}, ${b.color || "#3E6B34"})
+      VALUES (${slug}, ${name}, ${password}, ${String(b.whatsapp || "").trim().slice(0, 20)}, ${b.color || "#0E7268"})
       RETURNING *`;
     return NextResponse.json({ row });
   } catch (e) {

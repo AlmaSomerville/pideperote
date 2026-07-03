@@ -1,11 +1,20 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 
 const eur = (c) => (c / 100).toFixed(2).replace(".", ",") + " €";
 
 export default function HomeClient({ restaurants }) {
   const [q, setQ] = useState("");
+  const [recent, setRecent] = useState([]);
+
+  useEffect(() => {
+    try {
+      const list = JSON.parse(localStorage.getItem("pp_orders") || "[]");
+      // Solo pedidos de las últimas 24h
+      setRecent(list.filter((o) => Date.now() - new Date(o.at).getTime() < 24 * 3600 * 1000));
+    } catch {}
+  }, []);
 
   const { open, closed } = useMemo(() => {
     const list = (restaurants || []).filter((r) =>
@@ -47,6 +56,17 @@ export default function HomeClient({ restaurants }) {
       </header>
 
       <div className="wrap" style={{ paddingTop: 6 }}>
+        {recent.length > 0 && (
+          <div className="recent-strip">
+            <span className="recent-label">Tus pedidos</span>
+            {recent.map((o) => (
+              <Link key={o.code} href={`/pedido/${o.code}`} className="recent-chip">
+                <b>{o.code}</b> · {o.restaurant}
+              </Link>
+            ))}
+          </div>
+        )}
+
         {restaurants === null && (
           <div className="panel">
             <h3>Falta configurar la base de datos</h3>

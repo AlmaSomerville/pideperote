@@ -1,14 +1,14 @@
 :root {
-  --bg: #f7f5f0;
+  --bg: #f5f8f7;
   --card: #ffffff;
-  --ink: #22261f;
-  --ink-soft: #6b7064;
-  --line: #e6e2d8;
-  --green: #3e6b34;
-  --green-dark: #2f5227;
-  --cta: #e8720c;
-  --cta-dark: #c95f05;
-  --danger: #c0392b;
+  --ink: #16302c;
+  --ink-soft: #5d7a75;
+  --line: #dbe7e4;
+  --green: #0e7268;
+  --green-dark: #0a544d;
+  --cta: #e58a1f;
+  --cta-dark: #c67310;
+  --danger: #c44536;
   --radius: 14px;
   --font-display: "Bricolage Grotesque", system-ui, sans-serif;
   --font-body: "Inter", system-ui, -apple-system, sans-serif;
@@ -87,8 +87,8 @@ label { font-size: 13px; font-weight: 600; color: var(--ink-soft); display: bloc
   display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.4px;
   padding: 2px 8px; border-radius: 99px; text-transform: uppercase;
 }
-.badge.open { background: #e3efdc; color: var(--green-dark); }
-.badge.shut { background: #f3e0dc; color: var(--danger); }
+.badge.open { background: #d9efeb; color: var(--green-dark); }
+.badge.shut { background: #f4e3de; color: var(--danger); }
 
 /* Menu page */
 .menu-hero {
@@ -200,7 +200,7 @@ label { font-size: 13px; font-weight: 600; color: var(--ink-soft); display: bloc
 }
 .panel h3 { font-family: var(--font-display); margin: 0 0 10px; font-size: 17px; }
 .order-card { border-left-width: 8px; }
-.order-card.nuevo { border-left-color: var(--cta); background: #fff8f1; }
+.order-card.nuevo { border-left-color: var(--cta); background: #fdf6ec; }
 .order-head { display: flex; justify-content: space-between; align-items: baseline; }
 .order-code { font-family: var(--font-display); font-weight: 800; font-size: 18px; }
 .order-time { font-size: 12.5px; color: var(--ink-soft); }
@@ -226,7 +226,7 @@ label { font-size: 13px; font-weight: 600; color: var(--ink-soft); display: bloc
 .muted { color: var(--ink-soft); font-size: 13.5px; }
 .inline-form { display: flex; gap: 8px; margin-top: 10px; }
 .inline-form input { flex: 1; }
-.tag { font-size: 11px; font-weight: 700; background: #eee9dd; border-radius: 6px; padding: 2px 6px; }
+.tag { font-size: 11px; font-weight: 700; background: #e3edea; border-radius: 6px; padding: 2px 6px; }
 .login-box { max-width: 380px; margin: 60px auto; }
 .color-dot { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--line); flex-shrink: 0; }
 .err { color: var(--danger); font-size: 14px; margin-top: 8px; }
@@ -241,9 +241,9 @@ hr.sep { border: none; border-top: 1.5px solid var(--line); margin: 16px 0; }
 .hero {
   position: relative;
   background:
-    radial-gradient(1200px 500px at 80% -10%, rgba(232,114,12,0.28), transparent 60%),
+    radial-gradient(1200px 500px at 80% -10%, rgba(229,138,31,0.22), transparent 60%),
     radial-gradient(900px 420px at 10% 110%, rgba(255,255,255,0.08), transparent 60%),
-    linear-gradient(160deg, #24401f 0%, var(--green-dark) 45%, var(--green) 100%);
+    linear-gradient(160deg, #06332f 0%, var(--green-dark) 45%, var(--green) 100%);
   color: #fff;
   padding: 26px 16px 74px;
   overflow: hidden;
@@ -264,7 +264,7 @@ hr.sep { border: none; border-top: 1.5px solid var(--line); margin: 16px 0; }
   letter-spacing: -1.5px;
   margin: 40px 0 0;
 }
-.hero-title .dot { color: #ffb35c; }
+.hero-title .dot { color: #ffc46b; }
 .hero-sub {
   font-size: clamp(15px, 2.5vw, 17px);
   opacity: 0.85; margin: 14px 0 26px; max-width: 480px;
@@ -364,3 +364,16 @@ hr.sep { border: none; border-top: 1.5px solid var(--line); margin: 16px 0; }
 .sched-row label { margin: 0; font-size: 14px; }
 .qr-box { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .qr-box img { width: 160px; height: 160px; border-radius: 12px; border: 1.5px solid var(--line); background: #fff; }
+
+/* Tus pedidos (localStorage, sin cuentas) */
+.recent-strip {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  margin: 18px 0 4px;
+}
+.recent-label { font-size: 13px; font-weight: 800; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.6px; }
+.recent-chip {
+  font-size: 13.5px; background: var(--card); border: 1.5px solid var(--line);
+  border-radius: 99px; padding: 7px 14px; color: var(--ink);
+}
+.recent-chip:hover { border-color: var(--green); }
+.recent-chip b { color: var(--green-dark); }

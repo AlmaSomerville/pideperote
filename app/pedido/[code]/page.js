@@ -20,7 +20,7 @@ export default function OrderPage({ params }) {
     let alive = true;
     async function load() {
       try {
-        const res = await fetch(`/api/order/${params.code}`);
+        const res = await fetch(`/api/order/${params.code}`, { cache: "no-store" });
         if (res.status === 404) return setNotFound(true);
         const d = await res.json();
         if (alive) {
@@ -36,8 +36,16 @@ export default function OrderPage({ params }) {
       } catch {}
     }
     load();
-    const t = setInterval(load, 15000);
-    return () => { alive = false; clearInterval(t); };
+    const t = setInterval(load, 10000);
+    const onWake = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+    };
   }, [params.code]);
 
   if (notFound)

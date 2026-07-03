@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { sendWhatsApp, orderMessage } from "@/lib/whatsapp";
-import { effectiveOpen } from "@/lib/hours";
+import { effectiveOpen, nextOpeningText } from "@/lib/hours";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,21 @@ export async function POST(req) {
 
     const [rest] = await sql`SELECT * FROM restaurants WHERE id = ${restaurantId} AND active = TRUE`;
     if (!rest) return NextResponse.json({ error: "Restaurante no encontrado." }, { status: 404 });
-    if (!effectiveOpen(rest)) return NextResponse.json({ error: "El restaurante está cerrado." }, { status: 400 });
+    if (!effectiveOpen(rest)) {
+      const next = nextOpeningText(rest);
+      return NextResponse.json({ error: `El restaurante está cerrado.${next ? " " + next + "." : ""}` }, { status: 400 });
+    }
+
+    if (rest.max_orders_per_hour > 0) {
+      const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM orders
+        WHERE restaurant_id = ${rest.id} AND status != 'rechazado'
+        AND created_at > NOW() - INTERVAL '60 minutes'`;
+      if (count >= rest.max_orders_per_hour)
+        return NextResponse.json(
+          { error: "El restaurante está a tope ahora mismo y no acepta más pedidos por un rato. Prueba en unos minutos." },
+          { status: 429 }
+        );
+    }
 
     const orderType = type === "recogida" && rest.pickup ? "recogida" : "reparto";
     if (orderType === "reparto" && !rest.delivery)

@@ -132,22 +132,18 @@ function RestCard({ r }) {
           </div>
         )}
         <span className={`badge float ${r.open ? "open" : "shut"}`}>{r.open ? "Abierto" : "Cerrado"}</span>
-      </div>
-      <div className="rcard-body">
         <div className="rcard-logo">
           {r.logo ? <img src={r.logo} alt="" /> : r.name.slice(0, 1).toUpperCase()}
         </div>
-        <div className="rcard-text">
-          <div className="rcard-name">{r.name}</div>
-          <div className="rcard-meta">
-            {r.hoursText && <span>{r.hoursText}</span>}
-            <span className="meta-tags">
-              {r.delivery && (r.deliveryFee > 0 ? `🛵 ${eur(r.deliveryFee)}` : "🛵 Gratis")}
-              {r.delivery && r.pickup && " · "}
-              {r.pickup && "🏃 Recogida"}
-              {r.minOrder > 0 && ` · Mín. ${eur(r.minOrder)}`}
-            </span>
-          </div>
+      </div>
+      <div className="rcard-body">
+        <div className="rcard-name">{r.name}</div>
+        <div className="rcard-chips">
+          {!r.open && r.opensAt && <span className="chip strong">{r.opensAt}</span>}
+          {r.hoursText && <span className="chip">{r.hoursText}</span>}
+          {r.delivery && <span className="chip">🛵 {r.deliveryFee > 0 ? eur(r.deliveryFee) : "Gratis"}</span>}
+          {r.pickup && <span className="chip">🏃 Recogida</span>}
+          {r.minOrder > 0 && <span className="chip">Mín. {eur(r.minOrder)}</span>}
         </div>
       </div>
     </Link>

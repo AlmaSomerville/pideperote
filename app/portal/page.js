@@ -442,6 +442,7 @@ function Settings({ data, reload }) {
     pickup: r.pickup,
     deliveryFee: (r.delivery_fee_cents / 100).toFixed(2),
     minOrder: (r.min_order_cents / 100).toFixed(2),
+    maxPerHour: String(r.max_orders_per_hour || 0),
     whatsapp: r.whatsapp || "",
     portalPassword: r.portal_password || "",
   });
@@ -481,6 +482,7 @@ function Settings({ data, reload }) {
       pickup: form.pickup,
       deliveryFeeCents: toCents(form.deliveryFee),
       minOrderCents: toCents(form.minOrder),
+      maxOrdersPerHour: Number(form.maxPerHour) || 0,
     };
     if (logo !== undefined) body.logo = logo;
     if (cover !== undefined) body.cover = cover;
@@ -540,7 +542,7 @@ function Settings({ data, reload }) {
           <label>{label}</label>
           <input
             value={sched[d]}
-            placeholder="12:00-16:00, 19:00-23:30"
+            placeholder="ej: 12:00-16:00, 19:00-23:30"
             onChange={(e) => setSched((s) => ({ ...s, [d]: e.target.value }))}
           />
         </div>
@@ -573,6 +575,15 @@ function Settings({ data, reload }) {
           <input value={form.deliveryFee} inputMode="decimal" onChange={(e) => setForm((f) => ({ ...f, deliveryFee: e.target.value }))} /></div>
         <div className="field"><label>Pedido mínimo (€)</label>
           <input value={form.minOrder} inputMode="decimal" onChange={(e) => setForm((f) => ({ ...f, minOrder: e.target.value }))} /></div>
+      </div>
+
+      <div className="field" style={{ marginTop: 10 }}>
+        <label>Máximo de pedidos por hora (0 = sin límite)</label>
+        <input value={form.maxPerHour} inputMode="numeric" style={{ maxWidth: 140 }}
+          onChange={(e) => setForm((f) => ({ ...f, maxPerHour: e.target.value }))} />
+        <p className="muted" style={{ margin: "4px 0 0" }}>
+          Al llegar al límite, la web deja de aceptar pedidos durante un rato y avisa al cliente de que estáis a tope.
+        </p>
       </div>
 
       {isAdmin && (

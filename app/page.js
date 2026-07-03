@@ -1,5 +1,5 @@
 import { sql } from "@/lib/db";
-import { effectiveOpen, hoursText } from "@/lib/hours";
+import { effectiveOpen, hoursText, nextOpeningText } from "@/lib/hours";
 import HomeClient from "./HomeClient";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +20,7 @@ export default async function Home() {
       color: r.color,
       open: effectiveOpen(r),
       hoursText: hoursText(r),
+      opensAt: effectiveOpen(r) ? "" : nextOpeningText(r),
       delivery: r.delivery,
       pickup: r.pickup,
       deliveryFee: r.delivery_fee_cents,

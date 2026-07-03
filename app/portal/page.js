@@ -1,0 +1,521 @@
+"use client";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+
+const eur = (c) => (c / 100).toFixed(2).replace(".", ",") + " €";
+const toCents = (s) => Math.round(parseFloat(String(s).replace(",", ".")) * 100) || 0;
+
+export default function PortalPage() {
+  return (
+    <Suspense fallback={<main className="wrap"><p className="muted">Cargando...</p></main>}>
+      <Portal />
+    </Suspense>
+  );
+}
+
+function Portal() {
+  const searchParams = useSearchParams();
+  const ridParam = searchParams.get("rid"); // admin entrando a un portal concreto
+  const [data, setData] = useState(null);
+  const [needLogin, setNeedLogin] = useState(false);
+  const [tab, setTab] = useState("pedidos");
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/portal/data${ridParam ? `?rid=${ridParam}` : ""}`);
+    if (res.status === 401 || res.status === 403) return setNeedLogin(true);
+    if (res.ok) {
+      setData(await res.json());
+      setNeedLogin(false);
+    }
+  }, [ridParam]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (needLogin) return <LoginBox onDone={load} />;
+  if (!data) return <main className="wrap"><p className="muted">Cargando...</p></main>;
+
+  const r = data.restaurant;
+
+  return (
+    <main className="wrap-wide">
+      <div className="topbar">
+        <Link href="/" className="wordmark">pideperote<span className="dot">.</span></Link>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {data.role === "admin" && <Link href="/admin" className="tag">← Admin</Link>}
+          <button
+            className="btn ghost"
+            onClick={async () => { await fetch("/api/portal/logout", { method: "POST" }); location.href = "/"; }}
+          >
+            Salir
+          </button>
+        </div>
+      </div>
+      <h2 style={{ fontFamily: "var(--font-display)", margin: "4px 0 0" }}>{r.name}</h2>
+      <OpenToggle restaurant={r} onChange={load} />
+
+      <div className="tabs">
+        {["pedidos", "carta", "ajustes"].map((t) => (
+          <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
+            {t === "pedidos" ? "Pedidos" : t === "carta" ? "Carta" : "Ajustes"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "pedidos" && <Orders rid={r.id} />}
+      {tab === "carta" && <MenuEditor data={data} reload={load} />}
+      {tab === "ajustes" && <Settings data={data} reload={load} />}
+    </main>
+  );
+}
+
+function LoginBox({ onDone }) {
+  const [slug, setSlug] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  async function login() {
+    setErr("");
+    const res = await fetch("/api/portal/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug, password }),
+    });
+    const d = await res.json();
+    if (!res.ok) return setErr(d.error);
+    onDone();
+  }
+  return (
+    <main className="wrap">
+      <div className="login-box panel">
+        <h3>Acceso restaurantes</h3>
+        <div className="field">
+          <label>Identificador (slug)</label>
+          <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="mi-restaurante" />
+        </div>
+        <div className="field">
+          <label>Contraseña</label>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && login()} />
+        </div>
+        {err && <p className="err">{err}</p>}
+        <button className="btn green" onClick={login}>Entrar</button>
+        <p className="muted" style={{ marginTop: 12 }}>
+          ¿Eres el administrador? <Link href="/admin"><u>Entra aquí</u></Link>
+        </p>
+      </div>
+    </main>
+  );
+}
+
+function OpenToggle({ restaurant, onChange }) {
+  const [busy, setBusy] = useState(false);
+  async function toggle() {
+    setBusy(true);
+    await fetch("/api/portal/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rid: restaurant.id, isOpen: !restaurant.is_open }),
+    });
+    await onChange();
+    setBusy(false);
+  }
+  return (
+    <button
+      className={`btn small ${restaurant.is_open ? "green" : "danger"}`}
+      style={{ marginTop: 8 }}
+      disabled={busy}
+      onClick={toggle}
+    >
+      {restaurant.is_open ? "🟢 Abierto — pulsar para cerrar" : "🔴 Cerrado — pulsar para abrir"}
+    </button>
+  );
+}
+
+/* ---------------- PEDIDOS ---------------- */
+
+const STATUS_FLOW = [
+  ["aceptado", "Aceptar"],
+  ["listo", "Listo / En camino"],
+  ["entregado", "Entregado"],
+  ["rechazado", "Rechazar"],
+];
+const STATUS_LABEL = { nuevo: "🆕 Nuevo", aceptado: "👨‍🍳 En preparación", listo: "🛵 Listo/En camino", entregado: "✅ Entregado", rechazado: "❌ Rechazado" };
+
+function Orders({ rid }) {
+  const [orders, setOrders] = useState(null);
+  const [sound, setSound] = useState(true);
+  const known = useRef(new Set());
+  const first = useRef(true);
+  const audioCtx = useRef(null);
+
+  const beep = useCallback(() => {
+    try {
+      if (!audioCtx.current) audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = audioCtx.current;
+      [0, 0.25, 0.5].forEach((t) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.value = 880;
+        g.gain.setValueAtTime(0.4, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.2);
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.22);
+      });
+    } catch {}
+  }, []);
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/portal/orders?rid=${rid}`);
+    if (!res.ok) return;
+    const d = await res.json();
+    let fresh = false;
+    for (const o of d.orders) {
+      if (!known.current.has(o.id)) {
+        known.current.add(o.id);
+        if (!first.current) fresh = true;
+      }
+    }
+    first.current = false;
+    if (fresh && sound) beep();
+    setOrders(d.orders);
+  }, [rid, sound, beep]);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  async function setStatus(orderId, status) {
+    await fetch("/api/portal/orders", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId, status }),
+    });
+    load();
+  }
+
+  if (!orders) return <p className="muted">Cargando pedidos...</p>;
+
+  return (
+    <>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <input type="checkbox" style={{ width: 18, height: 18 }} checked={sound} onChange={(e) => setSound(e.target.checked)} />
+        Sonido al llegar pedidos nuevos (mantén esta pestaña abierta)
+      </label>
+      {orders.length === 0 && <p className="muted">Sin pedidos en las últimas 48 horas.</p>}
+      {orders.map((o) => (
+        <div key={o.id} className={`panel order-card ${o.status === "nuevo" ? "nuevo" : ""}`} style={{ borderLeftColor: o.status === "nuevo" ? "var(--cta)" : "var(--line)" }}>
+          <div className="order-head">
+            <span className="order-code">{o.code} <span className="tag">{STATUS_LABEL[o.status]}</span></span>
+            <span className="order-time">{new Date(o.created_at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span>
+          </div>
+          <div className="order-items">
+            {o.items.map((it, i) => (
+              <div key={i}>
+                <b>{it.qty}x {it.name}</b> — {eur(it.unit_price_cents * it.qty)}
+                {it.modifiers && <div className="mods">↳ {it.modifiers.split(" | ").join(", ")}</div>}
+              </div>
+            ))}
+          </div>
+          <div className="muted">
+            {o.type === "reparto" ? `🛵 ${o.address}` : "🏃 Recogida"} · {o.customer_name} ·{" "}
+            <a href={`tel:${o.phone}`}><u>{o.phone}</u></a>
+            {o.notes && <div>📝 {o.notes}</div>}
+          </div>
+          <div className="totals big" style={{ marginTop: 6 }}>
+            <span>Total (efectivo)</span><span>{eur(o.total_cents)}</span>
+          </div>
+          {o.status !== "entregado" && o.status !== "rechazado" && (
+            <div className="status-select">
+              {STATUS_FLOW.map(([st, label]) => (
+                <button key={st} className={o.status === st ? "on" : ""} onClick={() => setStatus(o.id, st)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
+/* ---------------- CARTA ---------------- */
+
+function MenuEditor({ data, reload }) {
+  const rid = data.restaurant.id;
+  const [newCat, setNewCat] = useState("");
+  const [openItem, setOpenItem] = useState(null);
+
+  async function rpc(action, payload) {
+    const res = await fetch("/api/portal/menu", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rid, action, ...payload }),
+    });
+    if (!res.ok) alert((await res.json()).error || "Error");
+    await reload();
+  }
+
+  return (
+    <>
+      {data.categories.map((c) => (
+        <div className="panel" key={c.id}>
+          <div className="list-row" style={{ borderBottom: "none", paddingTop: 0 }}>
+            <h3 style={{ margin: 0, flex: 1 }}>{c.name}</h3>
+            <button className="btn small secondary" onClick={() => {
+              const name = prompt("Nombre de la categoría:", c.name);
+              if (name) rpc("category.update", { id: c.id, name, sort: c.sort });
+            }}>Renombrar</button>
+            <button className="btn small danger" onClick={() => {
+              if (confirm(`¿Borrar "${c.name}" y todos sus artículos?`)) rpc("category.delete", { id: c.id });
+            }}>Borrar</button>
+          </div>
+          {data.items.filter((i) => i.category_id === c.id).map((i) => (
+            <ItemEditor key={i.id} item={i} data={data} rpc={rpc}
+              open={openItem === i.id} setOpen={(v) => setOpenItem(v ? i.id : null)} />
+          ))}
+          <AddItem categoryId={c.id} rpc={rpc} />
+        </div>
+      ))}
+      <div className="panel">
+        <h3>Nueva categoría</h3>
+        <div className="inline-form">
+          <input value={newCat} placeholder="Ej: Hamburguesas" onChange={(e) => setNewCat(e.target.value)} />
+          <button className="btn small green" onClick={() => { if (newCat.trim()) { rpc("category.add", { name: newCat }); setNewCat(""); } }}>
+            Añadir
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AddItem({ categoryId, rpc }) {
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  return (
+    <div className="inline-form">
+      <input value={name} placeholder="Nuevo artículo" onChange={(e) => setName(e.target.value)} />
+      <input value={price} placeholder="€" style={{ maxWidth: 90 }} inputMode="decimal" onChange={(e) => setPrice(e.target.value)} />
+      <button className="btn small green" onClick={() => {
+        if (!name.trim()) return;
+        rpc("item.add", { categoryId, name, priceCents: toCents(price) });
+        setName(""); setPrice("");
+      }}>Añadir</button>
+    </div>
+  );
+}
+
+function ItemEditor({ item, data, rpc, open, setOpen }) {
+  const [form, setForm] = useState({ name: item.name, description: item.description, price: (item.price_cents / 100).toFixed(2) });
+  const groups = data.groups.filter((g) => g.item_id === item.id);
+
+  return (
+    <div style={{ borderBottom: "1px solid var(--line)", padding: "8px 0" }}>
+      <div className="list-row" style={{ borderBottom: "none", padding: "4px 0" }}>
+        <div className="grow">
+          <b>{item.name}</b> · {eur(item.price_cents)}
+          {!item.available && <span className="tag" style={{ marginLeft: 6 }}>Agotado</span>}
+        </div>
+        <button className="btn small secondary" onClick={() => rpc("item.toggle", { id: item.id })}>
+          {item.available ? "Marcar agotado" : "Disponible"}
+        </button>
+        <button className="btn small secondary" onClick={() => setOpen(!open)}>{open ? "Cerrar" : "Editar"}</button>
+      </div>
+      {open && (
+        <div style={{ padding: "8px 0 4px" }}>
+          <div className="row2">
+            <div className="field"><label>Nombre</label>
+              <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
+            <div className="field"><label>Precio (€)</label>
+              <input value={form.price} inputMode="decimal" onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} /></div>
+          </div>
+          <div className="field"><label>Descripción</label>
+            <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn small green" onClick={() =>
+              rpc("item.update", { id: item.id, name: form.name, description: form.description, priceCents: toCents(form.price), available: item.available, sort: item.sort })
+            }>Guardar</button>
+            <button className="btn small danger" onClick={() => { if (confirm("¿Borrar artículo?")) rpc("item.delete", { id: item.id }); }}>Borrar</button>
+          </div>
+
+          <hr className="sep" />
+          <b style={{ fontSize: 14 }}>Opciones del artículo (salsas, extras, tamaños...)</b>
+          {groups.map((g) => (
+            <GroupEditor key={g.id} group={g} options={data.options.filter((o) => o.group_id === g.id)} rpc={rpc} />
+          ))}
+          <button className="btn small secondary" style={{ marginTop: 8 }} onClick={() => {
+            const name = prompt("Nombre del grupo (ej: Salsas, Extras, Tamaño):");
+            if (!name) return;
+            const max = Number(prompt("¿Cuántas opciones se pueden elegir como máximo?", "3")) || 1;
+            const min = Number(prompt("¿Mínimo obligatorio? (0 = opcional)", "0")) || 0;
+            rpc("group.add", { itemId: item.id, name, min, max });
+          }}>+ Añadir grupo de opciones</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GroupEditor({ group, options, rpc }) {
+  const [name, setName] = useState("");
+  const [delta, setDelta] = useState("");
+  return (
+    <div style={{ background: "var(--bg)", borderRadius: 10, padding: "8px 10px", marginTop: 8 }}>
+      <div className="list-row" style={{ borderBottom: "none", padding: "2px 0" }}>
+        <div className="grow">
+          <b>{group.name}</b>{" "}
+          <span className="muted">
+            ({group.min_select > 0 ? `obligatorio, ` : "opcional, "}máx. {group.max_select})
+          </span>
+        </div>
+        <button className="btn ghost" onClick={() => { if (confirm("¿Borrar grupo?")) rpc("group.delete", { id: group.id }); }}>🗑</button>
+      </div>
+      {options.map((o) => (
+        <div className="list-row" key={o.id} style={{ padding: "4px 0" }}>
+          <div className="grow">{o.name} {o.price_delta_cents !== 0 && <span className="muted">+{eur(o.price_delta_cents)}</span>}</div>
+          <button className="btn ghost" onClick={() => rpc("option.delete", { id: o.id })}>✕</button>
+        </div>
+      ))}
+      <div className="inline-form">
+        <input value={name} placeholder="Ej: Con ketchup" onChange={(e) => setName(e.target.value)} />
+        <input value={delta} placeholder="+€" style={{ maxWidth: 80 }} inputMode="decimal" onChange={(e) => setDelta(e.target.value)} />
+        <button className="btn small secondary" onClick={() => {
+          if (!name.trim()) return;
+          rpc("option.add", { groupId: group.id, name, deltaCents: toCents(delta) });
+          setName(""); setDelta("");
+        }}>+</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- AJUSTES ---------------- */
+
+function Settings({ data, reload }) {
+  const r = data.restaurant;
+  const isAdmin = data.role === "admin";
+  const [form, setForm] = useState({
+    name: r.name,
+    color: r.color,
+    hours: r.hours,
+    delivery: r.delivery,
+    pickup: r.pickup,
+    deliveryFee: (r.delivery_fee_cents / 100).toFixed(2),
+    minOrder: (r.min_order_cents / 100).toFixed(2),
+    whatsapp: r.whatsapp || "",
+    portalPassword: r.portal_password || "",
+  });
+  const [logo, setLogo] = useState(undefined);
+  const [msg, setMsg] = useState("");
+
+  function pickLogo(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => {
+      img.onload = () => {
+        // Redimensionar a 256px para que quepa en la BD
+        const canvas = document.createElement("canvas");
+        const s = Math.min(256 / img.width, 256 / img.height, 1);
+        canvas.width = Math.round(img.width * s);
+        canvas.height = Math.round(img.height * s);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        setLogo(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function save() {
+    setMsg("");
+    const body = {
+      rid: r.id,
+      name: form.name,
+      color: form.color,
+      hours: form.hours,
+      delivery: form.delivery,
+      pickup: form.pickup,
+      deliveryFeeCents: toCents(form.deliveryFee),
+      minOrderCents: toCents(form.minOrder),
+    };
+    if (logo !== undefined) body.logo = logo;
+    if (isAdmin) {
+      body.whatsapp = form.whatsapp;
+      body.portalPassword = form.portalPassword;
+    }
+    const res = await fetch("/api/portal/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await res.json();
+    setMsg(res.ok ? "Guardado ✓" : d.error);
+    if (res.ok) reload();
+  }
+
+  return (
+    <div className="panel">
+      <div className="field"><label>Nombre del restaurante</label>
+        <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
+
+      <div className="row2">
+        <div className="field">
+          <label>Color del restaurante</label>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input type="color" value={form.color} style={{ width: 52, height: 42, padding: 2 }}
+              onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))} />
+            <span className="muted">{form.color}</span>
+          </div>
+        </div>
+        <div className="field">
+          <label>Logo</label>
+          <input type="file" accept="image/*" onChange={pickLogo} />
+          {(logo || r.logo) && <img src={logo ?? r.logo} alt="logo" style={{ width: 48, height: 48, borderRadius: 10, marginTop: 6, objectFit: "cover" }} />}
+        </div>
+      </div>
+
+      <div className="field"><label>Horario (texto libre que ve el cliente)</label>
+        <input value={form.hours} placeholder="Ma-Do 12:00-16:00, 19:00-23:30" onChange={(e) => setForm((f) => ({ ...f, hours: e.target.value }))} /></div>
+
+      <div className="row2">
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 15, fontWeight: 500, color: "var(--ink)" }}>
+          <input type="checkbox" style={{ width: 18, height: 18 }} checked={form.delivery} onChange={(e) => setForm((f) => ({ ...f, delivery: e.target.checked }))} />
+          Reparto a domicilio
+        </label>
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 15, fontWeight: 500, color: "var(--ink)" }}>
+          <input type="checkbox" style={{ width: 18, height: 18 }} checked={form.pickup} onChange={(e) => setForm((f) => ({ ...f, pickup: e.target.checked }))} />
+          Recogida en local
+        </label>
+      </div>
+
+      <div className="row2" style={{ marginTop: 10 }}>
+        <div className="field"><label>Coste de reparto (€)</label>
+          <input value={form.deliveryFee} inputMode="decimal" onChange={(e) => setForm((f) => ({ ...f, deliveryFee: e.target.value }))} /></div>
+        <div className="field"><label>Pedido mínimo (€)</label>
+          <input value={form.minOrder} inputMode="decimal" onChange={(e) => setForm((f) => ({ ...f, minOrder: e.target.value }))} /></div>
+      </div>
+
+      {isAdmin && (
+        <>
+          <hr className="sep" />
+          <p className="muted" style={{ marginTop: 0 }}>Solo visible para el admin:</p>
+          <div className="row2">
+            <div className="field"><label>WhatsApp del restaurante (para avisos de pedidos)</label>
+              <input value={form.whatsapp} placeholder="600123456" onChange={(e) => setForm((f) => ({ ...f, whatsapp: e.target.value }))} /></div>
+            <div className="field"><label>Contraseña del portal</label>
+              <input value={form.portalPassword} onChange={(e) => setForm((f) => ({ ...f, portalPassword: e.target.value }))} /></div>
+          </div>
+          <p className="muted">Slug de acceso: <b>{r.slug}</b> · Carta pública: /r/{r.slug}</p>
+        </>
+      )}
+
+      {msg && <p className={msg.includes("✓") ? "ok" : "err"}>{msg}</p>}
+      <button className="btn green" style={{ marginTop: 8 }} onClick={save}>Guardar cambios</button>
+    </div>
+  );
+}

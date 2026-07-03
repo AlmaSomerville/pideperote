@@ -2,6 +2,7 @@ import Link from "next/link";
 import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 async function getRestaurants() {
   try {

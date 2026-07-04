@@ -1,11 +1,11 @@
 :root {
-  --bg: #f5f8f7;
+  --bg: #f3fafa;
   --card: #ffffff;
-  --ink: #16302c;
-  --ink-soft: #5d7a75;
-  --line: #dbe7e4;
-  --green: #0e7268;
-  --green-dark: #0a544d;
+  --ink: #0e2e2e;
+  --ink-soft: #4f7f7f;
+  --line: #d2e9e9;
+  --green: #00b3b3;
+  --green-dark: #007f80;
   --cta: #e58a1f;
   --cta-dark: #c67310;
   --danger: #c44536;
@@ -243,7 +243,7 @@ hr.sep { border: none; border-top: 1.5px solid var(--line); margin: 16px 0; }
   background:
     radial-gradient(1200px 500px at 80% -10%, rgba(229,138,31,0.22), transparent 60%),
     radial-gradient(900px 420px at 10% 110%, rgba(255,255,255,0.08), transparent 60%),
-    linear-gradient(160deg, #06332f 0%, var(--green-dark) 45%, var(--green) 100%);
+    linear-gradient(160deg, #013b3d 0%, #008c8f 55%, var(--green) 100%);
   color: #fff;
   padding: 26px 16px 74px;
   overflow: hidden;

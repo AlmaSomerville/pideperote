@@ -87,7 +87,7 @@ label { font-size: 13px; font-weight: 600; color: var(--ink-soft); display: bloc
   display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.4px;
   padding: 2px 8px; border-radius: 99px; text-transform: uppercase;
 }
-.badge.open { background: #d9efeb; color: var(--green-dark); }
+.badge.open { background: #ccf5f5; color: #00696a; }
 .badge.shut { background: #f4e3de; color: var(--danger); }
 
 /* Menu page */
@@ -241,9 +241,9 @@ hr.sep { border: none; border-top: 1.5px solid var(--line); margin: 16px 0; }
 .hero {
   position: relative;
   background:
-    radial-gradient(1200px 500px at 80% -10%, rgba(229,138,31,0.22), transparent 60%),
+    radial-gradient(1300px 550px at 80% -15%, rgba(255,196,107,0.30), transparent 60%),
     radial-gradient(900px 420px at 10% 110%, rgba(255,255,255,0.08), transparent 60%),
-    linear-gradient(160deg, #013b3d 0%, #008c8f 55%, var(--green) 100%);
+    linear-gradient(150deg, #00767a 0%, #00a3a6 45%, #12c4c0 100%);
   color: #fff;
   padding: 26px 16px 74px;
   overflow: hidden;

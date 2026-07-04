@@ -1,11 +1,11 @@
 :root {
-  --bg: #f4f9f8;
+  --bg: #f3fafa;
   --card: #ffffff;
-  --ink: #123331;
-  --ink-soft: #56807b;
-  --line: #d5e8e5;
-  --green: #00a896;
-  --green-dark: #007a6e;
+  --ink: #0e2e2e;
+  --ink-soft: #4f7f7f;
+  --line: #d2e9e9;
+  --green: #00b3b3;
+  --green-dark: #007f80;
   --cta: #e58a1f;
   --cta-dark: #c67310;
   --danger: #c44536;
@@ -87,7 +87,7 @@ label { font-size: 13px; font-weight: 600; color: var(--ink-soft); display: bloc
   display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.4px;
   padding: 2px 8px; border-radius: 99px; text-transform: uppercase;
 }
-.badge.open { background: #d2f4ef; color: #00695e; }
+.badge.open { background: #ccf5f5; color: #00696a; }
 .badge.shut { background: #f4e3de; color: var(--danger); }
 
 /* Menu page */
@@ -243,7 +243,7 @@ hr.sep { border: none; border-top: 1.5px solid var(--line); margin: 16px 0; }
   background:
     radial-gradient(1200px 500px at 80% -10%, rgba(229,138,31,0.22), transparent 60%),
     radial-gradient(900px 420px at 10% 110%, rgba(255,255,255,0.08), transparent 60%),
-    linear-gradient(160deg, #013a36 0%, #00877a 55%, var(--green) 100%);
+    linear-gradient(160deg, #013b3d 0%, #008c8f 55%, var(--green) 100%);
   color: #fff;
   padding: 26px 16px 74px;
   overflow: hidden;

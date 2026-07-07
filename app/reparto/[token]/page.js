@@ -21,10 +21,19 @@ export default function RepartoPage({ params }) {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 15000);
+    const t = setInterval(() => { if (document.visibilityState === "visible") load(); }, 15000);
     const onWake = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", onWake);
-    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onWake); };
+    window.addEventListener("focus", onWake);
+    window.addEventListener("pageshow", onWake);
+    window.addEventListener("online", onWake);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+      window.removeEventListener("pageshow", onWake);
+      window.removeEventListener("online", onWake);
+    };
   }, [load]);
 
   async function doAction(action) {

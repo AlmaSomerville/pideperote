@@ -22,7 +22,7 @@ export async function GET(_req, { params }) {
   if (expired(o)) return NextResponse.json({ error: "expired" }, { status: 410 });
   const items = await sql`SELECT name, qty, modifiers FROM order_items WHERE order_id = ${o.id}`;
   const { id, ...order } = o;
-  return NextResponse.json({ order, items });
+  return NextResponse.json({ order, items }, { headers: { "Cache-Control": "no-store" } });
 }
 
 // PATCH { action: "recogido" | "entregado" }

@@ -9,5 +9,5 @@ export async function GET(_req, { params }) {
   if (!order) return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
   const items = await sql`SELECT oi.name, oi.qty, oi.unit_price_cents, oi.modifiers FROM order_items oi
     JOIN orders o ON o.id = oi.order_id WHERE o.code = ${params.code}`;
-  return NextResponse.json({ order, items });
+  return NextResponse.json({ order, items }, { headers: { "Cache-Control": "no-store" } });
 }

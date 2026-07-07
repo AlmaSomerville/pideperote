@@ -37,15 +37,20 @@ export default function OrderPage({ params }) {
       } catch {}
     }
     load();
-    const t = setInterval(load, 10000);
+    const t = setInterval(() => { if (document.visibilityState === "visible") load(); }, 10000);
+    // El móvil congela pestañas en segundo plano: al volver (por cualquier vía), recargar al momento
     const onWake = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", onWake);
     window.addEventListener("focus", onWake);
+    window.addEventListener("pageshow", onWake);
+    window.addEventListener("online", onWake);
     return () => {
       alive = false;
       clearInterval(t);
       document.removeEventListener("visibilitychange", onWake);
       window.removeEventListener("focus", onWake);
+      window.removeEventListener("pageshow", onWake);
+      window.removeEventListener("online", onWake);
     };
   }, [params.code]);
 
@@ -66,7 +71,7 @@ export default function OrderPage({ params }) {
     <main className="wrap">
       <div className="confirm-box">
         <div className="big-icon">{rejected ? "😕" : order.status === "entregado" ? "✅" : order.status === "en_camino" ? "🛵" : "🍔"}</div>
-        <h1>{rejected ? "Pedido rechazado" : "¡Pedido enviado!"}</h1>
+        <h1>{rejected ? "Pedido rechazado" : order.status === "entregado" ? "¡Pedido entregado!" : order.status === "en_camino" ? "Pedido en camino" : "¡Pedido enviado!"}</h1>
         <div className="code-chip">{order.code}</div>
         {order.scheduled_for && (
           <p className="status-now" style={{ marginBottom: 4 }}>

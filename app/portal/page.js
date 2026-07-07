@@ -199,7 +199,17 @@ function Orders({ rid, rname }) {
   useEffect(() => {
     load();
     const t = setInterval(load, 10000);
-    return () => clearInterval(t);
+    // Recargar al volver a la pestaña (el navegador congela pestañas en segundo plano)
+    const onWake = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("pageshow", onWake);
+    window.addEventListener("online", onWake);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("pageshow", onWake);
+      window.removeEventListener("online", onWake);
+    };
   }, [load]);
 
   async function setStatus(orderId, status) {

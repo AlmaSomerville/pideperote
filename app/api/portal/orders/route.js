@@ -30,9 +30,10 @@ export async function GET(req) {
   const items = ids.length
     ? await sql`SELECT order_id, name, qty, unit_price_cents, modifiers FROM order_items WHERE order_id = ANY(${ids})`
     : [];
-  return NextResponse.json({
-    orders: orders.map((o) => ({ ...o, items: items.filter((i) => i.order_id === o.id) })),
-  });
+  return NextResponse.json(
+    { orders: orders.map((o) => ({ ...o, items: items.filter((i) => i.order_id === o.id) })) },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
 
 // POST { orderId, courierId } — asignar repartidor y generar enlace de entrega.

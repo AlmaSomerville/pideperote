@@ -8,6 +8,7 @@ const STATUS_LABEL = {
   nuevo: "Enviado al restaurante",
   aceptado: "Aceptado, en preparación",
   listo: "Listo / en camino",
+  en_camino: "En camino 🛵",
   entregado: "Entregado",
   rechazado: "Rechazado por el restaurante",
 };
@@ -64,7 +65,7 @@ export default function OrderPage({ params }) {
   return (
     <main className="wrap">
       <div className="confirm-box">
-        <div className="big-icon">{rejected ? "😕" : order.status === "entregado" ? "✅" : "🍔"}</div>
+        <div className="big-icon">{rejected ? "😕" : order.status === "entregado" ? "✅" : order.status === "en_camino" ? "🛵" : "🍔"}</div>
         <h1>{rejected ? "Pedido rechazado" : "¡Pedido enviado!"}</h1>
         <div className="code-chip">{order.code}</div>
         {order.scheduled_for && (

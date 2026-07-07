@@ -69,6 +69,12 @@ Sin configurar nada, los restaurantes ven los pedidos en su panel (suena una ala
 4. **Importante**: Meta solo deja enviar texto libre dentro de la "ventana de 24h" (si el restaurante escribió al número hace <24h). Para producción crea una **plantilla** aprobada (ej. `nuevo_pedido` con una variable `{{1}}`) y añade `WHATSAPP_TEMPLATE=nuevo_pedido` en Vercel.
 5. El número de cada restaurante se pone desde `/admin` → su portal → Ajustes.
 
+## Repartidores (sin coste)
+
+Cada restaurante apunta a sus repartidores (nombre + WhatsApp) en su portal → **Ajustes**. En los pedidos de reparto aparece un botón por repartidor: al pulsarlo se abre WhatsApp con un enlace único de ese pedido. El repartidor ve la dirección (con botón a Google Maps), el teléfono del cliente, el contenido del pedido y **cuánto cobrar en efectivo**, y marca «He recogido» y «Entregado» — el estado se actualiza al momento para el cliente y el restaurante (nuevo estado `en_camino`). El enlace caduca a las 24h y no necesita cuenta ni app; reasignar el pedido a otro repartidor invalida el enlace anterior.
+
+> Si vienes de una versión anterior: visita otra vez `/api/setup?password=TU_ADMIN_PASSWORD` para crear la tabla `couriers` y las columnas nuevas de `orders`.
+
 ## Notas técnicas
 
 - Los precios se recalculan siempre en el servidor; el cliente no puede manipular totales.

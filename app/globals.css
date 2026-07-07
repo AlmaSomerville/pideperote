@@ -384,3 +384,31 @@ hr.sep { border: none; border-top: 1.5px solid var(--line); margin: 16px 0; }
 }
 .recent-chip:hover { border-color: var(--green); }
 .recent-chip b { color: var(--green-dark); }
+
+/* ===================== REPARTIDORES ===================== */
+.order-card.done { opacity: 0.6; }
+.courier-row {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
+  font-size: 13.5px;
+}
+.btn.big { padding: 18px; font-size: 18px; border-radius: 14px; }
+.courier-total {
+  font-family: var(--font-display); font-weight: 800; font-size: 26px;
+  color: var(--green-dark); background: #eafafa;
+  border: 2px dashed var(--green); border-radius: 12px;
+  padding: 10px 14px; margin: 12px 0; text-align: center;
+}
+.courier-total small { display: block; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.courier-dest { font-size: 16px; line-height: 1.55; margin-bottom: 12px; }
+.courier-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.courier-actions .btn { padding: 13px 8px; font-size: 15px; }
+.courier-steps { display: flex; gap: 6px; margin: 10px 0 2px; }
+.courier-steps span {
+  flex: 1; text-align: center; font-size: 12px; font-weight: 700;
+  color: var(--ink-soft); background: var(--bg);
+  border: 1.5px solid var(--line); border-radius: 99px; padding: 5px 2px;
+  white-space: nowrap;
+}
+.courier-steps span.on { background: var(--green); border-color: var(--green); color: #fff; }
+.courier-steps span.done { background: #ccf5f5; border-color: #ccf5f5; color: var(--green-dark); }

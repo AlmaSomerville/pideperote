@@ -65,9 +65,14 @@ function Portal() {
         ))}
       </div>
 
-      {tab === "pedidos" && <Orders rid={r.id} />}
+      {tab === "pedidos" && <Orders rid={r.id} rname={r.name} />}
       {tab === "carta" && <MenuEditor data={data} reload={load} />}
-      {tab === "ajustes" && <Settings data={data} reload={load} />}
+      {tab === "ajustes" && (
+        <>
+          <CouriersSection rid={r.id} />
+          <Settings data={data} reload={load} />
+        </>
+      )}
     </main>
   );
 }
@@ -142,14 +147,22 @@ const STATUS_FLOW = [
   ["entregado", "Entregado"],
   ["rechazado", "Rechazar"],
 ];
-const STATUS_LABEL = { nuevo: "🆕 Nuevo", aceptado: "👨‍🍳 En preparación", listo: "🛵 Listo/En camino", entregado: "✅ Entregado", rechazado: "❌ Rechazado" };
+const STATUS_LABEL = { nuevo: "🆕 Nuevo", aceptado: "👨‍🍳 En preparación", listo: "🛵 Listo/En camino", en_camino: "🛵 En camino", entregado: "✅ Entregado", rechazado: "❌ Rechazado" };
 
-function Orders({ rid }) {
+function Orders({ rid, rname }) {
   const [orders, setOrders] = useState(null);
+  const [couriers, setCouriers] = useState([]);
   const [sound, setSound] = useState(true);
   const known = useRef(new Set());
   const first = useRef(true);
   const audioCtx = useRef(null);
+
+  useEffect(() => {
+    fetch(`/api/portal/couriers?rid=${rid}`)
+      .then((r) => (r.ok ? r.json() : { couriers: [] }))
+      .then((d) => setCouriers(d.couriers || []))
+      .catch(() => {});
+  }, [rid]);
 
   const beep = useCallback(() => {
     try {
@@ -208,7 +221,7 @@ function Orders({ rid }) {
       </label>
       {orders.length === 0 && <p className="muted">Sin pedidos en las últimas 48 horas.</p>}
       {orders.map((o) => (
-        <div key={o.id} className={`panel order-card ${o.status === "nuevo" ? "nuevo" : ""}`} style={{ borderLeftColor: o.status === "nuevo" ? "var(--cta)" : "var(--line)" }}>
+        <div key={o.id} className={`panel order-card ${o.status === "nuevo" ? "nuevo" : ""} ${o.status === "entregado" || o.status === "rechazado" ? "done" : ""}`} style={{ borderLeftColor: o.status === "nuevo" ? "var(--cta)" : "var(--line)" }}>
           <div className="order-head">
             <span className="order-code">
               {o.code} <span className="tag">{STATUS_LABEL[o.status]}</span>
@@ -236,6 +249,7 @@ function Orders({ rid }) {
           <div className="totals big" style={{ marginTop: 6 }}>
             <span>Total (efectivo)</span><span>{eur(o.total_cents)}</span>
           </div>
+          <CourierRow order={o} couriers={couriers} rname={rname} reload={load} />
           {o.status !== "entregado" && o.status !== "rechazado" && (
             <div className="status-select">
               {STATUS_FLOW.map(([st, label]) => (
@@ -248,6 +262,126 @@ function Orders({ rid }) {
         </div>
       ))}
     </>
+  );
+}
+
+/* ---------------- REPARTIDORES ---------------- */
+
+const waNumber = (phone) => {
+  const digits = String(phone).replace(/\D/g, "");
+  return digits.length === 9 ? "34" + digits : digits; // España por defecto
+};
+
+function CourierRow({ order, couriers, rname, reload }) {
+  const [busy, setBusy] = useState(false);
+  if (!couriers.length || order.type !== "reparto") return null;
+  if (order.status === "entregado" || order.status === "rechazado")
+    return order.courier_name ? (
+      <div className="courier-row">🛵 Repartidor: <b>{order.courier_name}</b></div>
+    ) : null;
+
+  async function send(c) {
+    setBusy(true);
+    // Abrimos la ventana ANTES del fetch para que el navegador no bloquee el popup
+    const w = window.open("", "_blank");
+    try {
+      const res = await fetch("/api/portal/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: order.id, courierId: c.id }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "No se pudo asignar.");
+      const msg =
+        `🛵 Pedido ${order.code} — ${rname}\n` +
+        `📍 ${order.address}\n` +
+        `💶 Cobrar ${eur(order.total_cents)} en efectivo\n\n` +
+        `Dirección, teléfono del cliente y botones de entrega:\n` +
+        `${location.origin}/reparto/${d.token}`;
+      const url = `https://wa.me/${waNumber(c.phone)}?text=${encodeURIComponent(msg)}`;
+      if (w) w.location = url;
+      else location.href = url;
+      reload();
+    } catch (e) {
+      if (w) w.close();
+      alert(e.message);
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="courier-row">
+      <span className="muted">
+        {order.courier_name
+          ? <>🛵 Con <b>{order.courier_name}</b> · reenviar o cambiar:</>
+          : "🛵 Enviar a repartidor:"}
+      </span>
+      {couriers.map((c) => (
+        <button key={c.id} className="btn small secondary" disabled={busy} onClick={() => send(c)}>
+          {c.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CouriersSection({ rid }) {
+  const [couriers, setCouriers] = useState(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [err, setErr] = useState("");
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/portal/couriers?rid=${rid}`);
+    if (res.ok) setCouriers((await res.json()).couriers);
+  }, [rid]);
+  useEffect(() => { load(); }, [load]);
+
+  async function add() {
+    setErr("");
+    if (!name.trim()) return;
+    const res = await fetch("/api/portal/couriers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rid, name, phone }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return setErr(d.error || "No se pudo añadir.");
+    setName(""); setPhone("");
+    load();
+  }
+
+  async function del(c) {
+    if (!confirm(`¿Quitar a "${c.name}"?`)) return;
+    await fetch(`/api/portal/couriers?id=${c.id}`, { method: "DELETE" });
+    load();
+  }
+
+  return (
+    <div className="panel">
+      <h3>Repartidores</h3>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Añade a tus repartidores con su WhatsApp. En cada pedido de reparto te saldrá un botón con su
+        nombre: al pulsarlo se abre WhatsApp con un enlace del pedido. Ahí el repartidor ve la dirección
+        (con botón a Maps), el teléfono del cliente, qué lleva y cuánto cobrar, y marca <b>Recogido</b> y{" "}
+        <b>Entregado</b> — tú y el cliente veis el estado al momento. Se guardan al añadir.
+      </p>
+      {couriers === null && <p className="muted">Cargando...</p>}
+      {couriers?.length === 0 && <p className="muted">Todavía no hay repartidores.</p>}
+      {couriers?.map((c) => (
+        <div className="list-row" key={c.id}>
+          <div className="grow"><b>{c.name}</b> <span className="muted">· {c.phone}</span></div>
+          <button className="btn ghost" onClick={() => del(c)}>🗑</button>
+        </div>
+      ))}
+      <div className="inline-form">
+        <input value={name} placeholder="Nombre" onChange={(e) => setName(e.target.value)} />
+        <input value={phone} placeholder="WhatsApp (600123456)" inputMode="tel" style={{ maxWidth: 190 }}
+          onChange={(e) => setPhone(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <button className="btn small green" onClick={add}>Añadir</button>
+      </div>
+      {err && <p className="err">{err}</p>}
+    </div>
   );
 }
 

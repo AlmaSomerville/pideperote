@@ -1,8 +1,18 @@
 import "./globals.css";
 
 export const metadata = {
+  // Cambiar cuando haya dominio propio: hace absolutas las URLs de las imágenes
+  // para las vistas previas de WhatsApp y redes (og:image).
+  metadataBase: new URL("https://pideperote.vercel.app"),
   title: "PidePerote — Comida a domicilio en Álora",
-  description: "Pide a los restaurantes de Álora. Reparto y recogida.",
+  description: "Pide a los bares y restaurantes de Álora: a domicilio, para recoger o desde tu mesa.",
+  openGraph: {
+    title: "PidePerote",
+    description: "Los bares de Álora, en tu móvil. A domicilio, para recoger o desde tu mesa.",
+    siteName: "PidePerote",
+    locale: "es_ES",
+    type: "website",
+  },
 };
 
 export const viewport = { width: "device-width", initialScale: 1, themeColor: "#007F80" };

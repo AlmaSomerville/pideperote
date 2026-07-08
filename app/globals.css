@@ -412,3 +412,21 @@ hr.sep { border: none; border-top: 1.5px solid var(--line); margin: 16px 0; }
 }
 .courier-steps span.on { background: var(--green); border-color: var(--green); color: #fff; }
 .courier-steps span.done { background: #ccf5f5; border-color: #ccf5f5; color: var(--green-dark); }
+
+/* ===================== MESAS ===================== */
+.mesa-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.mesa-bill {
+  display: flex; align-items: center; gap: 12px;
+  background: #fff8ec; border: 1.5px solid #f0d9b0; border-radius: 12px;
+  padding: 8px 12px; font-size: 14px;
+}
+.grace-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 8px; padding: 8px 10px;
+  background: #fdf6ec; border: 1.5px dashed var(--cta); border-radius: 10px;
+  font-size: 14px; font-weight: 600;
+}
+.table-qr {
+  width: 72px; height: 72px; border-radius: 8px;
+  border: 1.5px solid var(--line); background: #fff; flex-shrink: 0;
+}

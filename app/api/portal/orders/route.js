@@ -21,9 +21,11 @@ export async function GET(req) {
       WHERE o.created_at > NOW() - INTERVAL '48 hours' ORDER BY o.created_at DESC LIMIT 200`;
   } else {
     if (!requireRestaurant(rid)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    // Activos arriba (más recientes primero); entregados/rechazados se van al fondo
+    // Activos arriba (más recientes primero); entregados/rechazados se van al fondo.
+    // Las rondas de mesa esperan 60s antes de aparecer: es la ventana de "cancelar" del cliente.
     orders = await sql`SELECT * FROM orders WHERE restaurant_id = ${rid}
       AND created_at > NOW() - INTERVAL '48 hours'
+      AND NOT (type = 'mesa' AND status = 'nuevo' AND created_at > NOW() - INTERVAL '60 seconds')
       ORDER BY (status IN ('entregado', 'rechazado')), created_at DESC LIMIT 200`;
   }
   const ids = orders.map((o) => o.id);
@@ -57,6 +59,19 @@ export async function POST(req) {
   await sql`UPDATE orders SET courier_id = ${courier.id}, courier_name = ${courier.name},
     delivery_token = ${token}, assigned_at = NOW() WHERE id = ${order.id}`;
   return NextResponse.json({ token, courier: { id: courier.id, name: courier.name, phone: courier.phone } });
+}
+
+// PUT { rid, tableId } — cobrar la mesa: marca como pagadas todas sus rondas pendientes
+// (y como entregadas las que no estuvieran rechazadas, para que bajen al fondo de la lista).
+export async function PUT(req) {
+  const { rid, tableId } = await req.json().catch(() => ({}));
+  if (!Number(rid) || !requireRestaurant(Number(rid)))
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  await sql`UPDATE orders SET paid_at = NOW(),
+    status = CASE WHEN status = 'rechazado' THEN status ELSE 'entregado' END
+    WHERE table_id = ${Number(tableId)} AND restaurant_id = ${Number(rid)}
+    AND type = 'mesa' AND paid_at IS NULL`;
+  return NextResponse.json({ ok: true });
 }
 
 // PATCH { orderId, status }

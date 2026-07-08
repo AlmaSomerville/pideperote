@@ -3,12 +3,9 @@ import { sql } from "@/lib/db";
 import { sendWhatsApp, orderMessage } from "@/lib/whatsapp";
 import { effectiveOpen, nextOpeningText } from "@/lib/hours";
 import { availability, candidateSlots, slotCapacity, SLOT_MS } from "@/lib/slots";
+import { priceLines, insertOrder } from "@/lib/order-utils";
 
 export const dynamic = "force-dynamic";
-
-function makeCode() {
-  return "PP-" + Math.random().toString(36).slice(2, 6).toUpperCase();
-}
 
 export async function POST(req) {
   try {
@@ -57,36 +54,9 @@ export async function POST(req) {
       return NextResponse.json({ error: "Falta la dirección." }, { status: 400 });
 
     // Recalcular precios en servidor (nunca confiar en el cliente)
-    const itemIds = [...new Set(lines.map((l) => Number(l.itemId)))];
-    const items = await sql`SELECT id, name, price_cents, available FROM items
-      WHERE id = ANY(${itemIds}) AND restaurant_id = ${rest.id}`;
-    const groups = await sql`SELECT g.id, g.item_id FROM modifier_groups g WHERE g.item_id = ANY(${itemIds})`;
-    const options = groups.length
-      ? await sql`SELECT id, group_id, name, price_delta_cents FROM modifier_options
-          WHERE group_id = ANY(${groups.map((g) => g.id)})`
-      : [];
-
-    let subtotal = 0;
-    const orderLines = [];
-    for (const l of lines) {
-      const item = items.find((i) => i.id === Number(l.itemId));
-      if (!item || !item.available)
-        return NextResponse.json({ error: `"${item?.name || "Un artículo"}" ya no está disponible.` }, { status: 400 });
-      const qty = Math.max(1, Math.min(50, Number(l.qty) || 1));
-      const itemGroupIds = groups.filter((g) => g.item_id === item.id).map((g) => g.id);
-      const validOpts = options.filter((o) => itemGroupIds.includes(o.group_id));
-      const chosen = (l.mods || [])
-        .map((mName) => validOpts.find((o) => o.name === mName))
-        .filter(Boolean);
-      const unit = item.price_cents + chosen.reduce((s, o) => s + o.price_delta_cents, 0);
-      subtotal += unit * qty;
-      orderLines.push({
-        name: item.name,
-        qty,
-        unit_price_cents: unit,
-        modifiers: chosen.map((o) => o.name).join(" | "),
-      });
-    }
+    const priced = await priceLines(rest.id, lines);
+    if (priced.error) return NextResponse.json({ error: priced.error }, { status: 400 });
+    const { subtotal, orderLines } = priced;
 
     if (rest.min_order_cents > 0 && subtotal < rest.min_order_cents)
       return NextResponse.json(
@@ -97,25 +67,20 @@ export async function POST(req) {
     const feeCents = orderType === "reparto" ? rest.delivery_fee_cents : 0;
     const total = subtotal + feeCents;
 
-    let order = null;
-    for (let i = 0; i < 5 && !order; i++) {
-      try {
-        [order] = await sql`INSERT INTO orders
-          (code, restaurant_id, customer_name, phone, address, notes, type, total_cents, delivery_fee_cents, scheduled_for)
-          VALUES (${makeCode()}, ${rest.id}, ${name.trim()}, ${phone.trim()}, ${address.trim()},
-                  ${notes.trim().slice(0, 500)}, ${orderType}, ${total}, ${feeCents},
-                  ${slotTs ? new Date(slotTs).toISOString() : null})
-          RETURNING *`;
-      } catch (e) {
-        if (!String(e.message).includes("duplicate")) throw e;
-      }
-    }
-    if (!order) throw new Error("No se pudo generar el código de pedido.");
-
-    for (const ol of orderLines) {
-      await sql`INSERT INTO order_items (order_id, name, qty, unit_price_cents, modifiers)
-        VALUES (${order.id}, ${ol.name}, ${ol.qty}, ${ol.unit_price_cents}, ${ol.modifiers})`;
-    }
+    const order = await insertOrder(
+      {
+        restaurantId: rest.id,
+        customerName: name.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
+        notes: notes.trim().slice(0, 500),
+        type: orderType,
+        totalCents: total,
+        deliveryFeeCents: feeCents,
+        scheduledFor: slotTs ? new Date(slotTs).toISOString() : null,
+      },
+      orderLines
+    );
 
     if (rest.whatsapp) {
       // No bloquear el pedido si WhatsApp falla

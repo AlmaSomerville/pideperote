@@ -58,14 +58,15 @@ function Portal() {
       <OpenToggle restaurant={r} onChange={load} />
 
       <div className="tabs">
-        {["pedidos", "carta", "ajustes"].map((t) => (
+        {[["pedidos", "Pedidos"], ["mesas", "Mesas"], ["carta", "Carta"], ["ajustes", "Ajustes"]].map(([t, label]) => (
           <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
-            {t === "pedidos" ? "Pedidos" : t === "carta" ? "Carta" : "Ajustes"}
+            {label}
           </button>
         ))}
       </div>
 
       {tab === "pedidos" && <Orders rid={r.id} rname={r.name} />}
+      {tab === "mesas" && <MesasSection rid={r.id} />}
       {tab === "carta" && <MenuEditor data={data} reload={load} />}
       {tab === "ajustes" && (
         <>
@@ -223,8 +224,38 @@ function Orders({ rid, rname }) {
 
   if (!orders) return <p className="muted">Cargando pedidos...</p>;
 
+  // Cuentas abiertas de mesas: rondas de mesa sin cobrar (agrupadas por mesa)
+  const openBills = {};
+  for (const o of orders) {
+    if (o.type === "mesa" && !o.paid_at && o.status !== "rechazado" && o.table_id) {
+      const b = (openBills[o.table_id] ||= { tableId: o.table_id, label: o.table_label, n: 0, total: 0 });
+      b.n++;
+      b.total += o.total_cents;
+    }
+  }
+
+  async function cobrar(b) {
+    if (!confirm(`¿Cobrar la mesa ${b.label}? Total: ${eur(b.total)} (${b.n} ${b.n === 1 ? "ronda" : "rondas"})`)) return;
+    await fetch("/api/portal/orders", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rid, tableId: b.tableId }),
+    });
+    load();
+  }
+
   return (
     <>
+      {Object.values(openBills).length > 0 && (
+        <div className="mesa-strip">
+          {Object.values(openBills).map((b) => (
+            <div className="mesa-bill" key={b.tableId}>
+              <span>🍽️ <b>Mesa {b.label}</b> · {b.n} {b.n === 1 ? "ronda" : "rondas"} · <b>{eur(b.total)}</b></span>
+              <button className="btn small green" onClick={() => cobrar(b)}>💶 Cobrar</button>
+            </div>
+          ))}
+        </div>
+      )}
       <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <input type="checkbox" style={{ width: 18, height: 18 }} checked={sound} onChange={(e) => setSound(e.target.checked)} />
         Sonido al llegar pedidos nuevos (mantén esta pestaña abierta)
@@ -252,12 +283,21 @@ function Orders({ rid, rname }) {
             ))}
           </div>
           <div className="muted">
-            {o.type === "reparto" ? `🛵 ${o.address}` : "🏃 Recogida"} · {o.customer_name} ·{" "}
-            <a href={`tel:${o.phone}`}><u>{o.phone}</u></a>
+            {o.type === "mesa" ? (
+              <>
+                🍽️ Mesa <b>{o.table_label}</b> · {o.customer_name}
+                {o.paid_at && <span className="tag" style={{ marginLeft: 6, background: "#ccf5f5", color: "var(--green-dark)" }}>💶 Pagada</span>}
+              </>
+            ) : (
+              <>
+                {o.type === "reparto" ? `🛵 ${o.address}` : "🏃 Recogida"} · {o.customer_name} ·{" "}
+                <a href={`tel:${o.phone}`}><u>{o.phone}</u></a>
+              </>
+            )}
             {o.notes && <div>📝 {o.notes}</div>}
           </div>
           <div className="totals big" style={{ marginTop: 6 }}>
-            <span>Total (efectivo)</span><span>{eur(o.total_cents)}</span>
+            <span>{o.type === "mesa" ? "Total de la ronda" : "Total (efectivo)"}</span><span>{eur(o.total_cents)}</span>
           </div>
           <CourierRow order={o} couriers={couriers} rname={rname} reload={load} />
           {o.status !== "entregado" && o.status !== "rechazado" && (
@@ -272,6 +312,108 @@ function Orders({ rid, rname }) {
         </div>
       ))}
     </>
+  );
+}
+
+/* ---------------- MESAS ---------------- */
+
+function MesasSection({ rid }) {
+  const [tables, setTables] = useState(null);
+  const [label, setLabel] = useState("");
+  const [err, setErr] = useState("");
+  const [origin, setOrigin] = useState("");
+
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/portal/tables?rid=${rid}`);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return setErr(d.error || "No se pudieron cargar las mesas.");
+    setTables(d.tables);
+  }, [rid]);
+  useEffect(() => { load(); }, [load]);
+
+  async function add() {
+    setErr("");
+    if (!label.trim()) return;
+    const res = await fetch("/api/portal/tables", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rid, label }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return setErr(d.error || "No se pudo añadir.");
+    setLabel("");
+    load();
+  }
+
+  async function regenerate(t) {
+    if (!confirm(`Se generará un QR nuevo para la mesa "${t.label}".\nLos QR ya impresos de esa mesa dejarán de funcionar. ¿Seguir?`)) return;
+    await fetch("/api/portal/tables", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: t.id, action: "regenerate" }),
+    });
+    load();
+  }
+
+  async function del(t) {
+    if (!confirm(`¿Quitar la mesa "${t.label}"? Su QR dejará de funcionar.`)) return;
+    await fetch(`/api/portal/tables?id=${t.id}`, { method: "DELETE" });
+    load();
+  }
+
+  async function downloadQR(t) {
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=2&data=${encodeURIComponent(`${origin}/mesa/${t.token}`)}`;
+    try {
+      const blob = await (await fetch(qrSrc)).blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `qr-mesa-${t.label}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      window.open(qrSrc, "_blank");
+    }
+  }
+
+  return (
+    <div className="panel">
+      <h3>Mesas con QR</h3>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Añade tus mesas y descarga el QR de cada una para imprimirlo y plastificarlo. Los clientes lo
+        escanean, piden desde la mesa y todo va a una <b>cuenta compartida</b> que cobras desde la
+        pestaña Pedidos. Cada ronda espera <b>1 minuto</b> antes de llegarte (la mesa puede cancelarla
+        en ese rato), y luego suena y se acepta como cualquier pedido. Si un QR se pierde o alguien
+        hace el tonto con él, dale a <b>↻ QR nuevo</b>: el impreso viejo muere al instante.
+      </p>
+      {err && <p className="err">{err}</p>}
+      {tables === null && !err && <p className="muted">Cargando...</p>}
+      {tables?.length === 0 && <p className="muted">Todavía no hay mesas.</p>}
+      {tables?.map((t) => (
+        <div className="list-row" key={t.id}>
+          {origin && (
+            <img
+              className="table-qr"
+              alt={`QR mesa ${t.label}`}
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=1&data=${encodeURIComponent(`${origin}/mesa/${t.token}`)}`}
+            />
+          )}
+          <div className="grow">
+            <b style={{ fontSize: 17 }}>Mesa {t.label}</b>
+            <div className="muted" style={{ wordBreak: "break-all" }}>/mesa/{t.token}</div>
+          </div>
+          <button className="btn small green" onClick={() => downloadQR(t)}>Descargar</button>
+          <button className="btn small secondary" onClick={() => regenerate(t)}>↻ QR nuevo</button>
+          <button className="btn ghost" onClick={() => del(t)}>🗑</button>
+        </div>
+      ))}
+      <div className="inline-form">
+        <input value={label} placeholder="Número o nombre (ej: 5, A, Terraza 2)"
+          onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <button className="btn small green" onClick={add}>Añadir mesa</button>
+      </div>
+    </div>
   );
 }
 

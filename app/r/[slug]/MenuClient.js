@@ -322,7 +322,7 @@ export default function MenuClient({ restaurant, menu }) {
   );
 }
 
-function ItemSheet({ item, onClose, onAdd }) {
+export function ItemSheet({ item, onClose, onAdd }) {
   const [qty, setQty] = useState(1);
   const [sel, setSel] = useState({}); // groupId -> array of options
 

@@ -69,6 +69,12 @@ Sin configurar nada, los restaurantes ven los pedidos en su panel (suena una ala
 4. **Importante**: Meta solo deja enviar texto libre dentro de la "ventana de 24h" (si el restaurante escribió al número hace <24h). Para producción crea una **plantilla** aprobada (ej. `nuevo_pedido` con una variable `{{1}}`) y añade `WHATSAPP_TEMPLATE=nuevo_pedido` en Vercel.
 5. El número de cada restaurante se pone desde `/admin` → su portal → Ajustes.
 
+## Mesas con QR (sin coste)
+
+En el portal → **Mesas**, cada restaurante añade sus mesas y descarga un QR por mesa para imprimir. El QR lleva un token secreto (`/mesa/xK3n9dQpLw2f`): si se pierde o hay abuso, «↻ QR nuevo» lo regenera y el impreso viejo deja de valer. Los clientes escanean, piden con su nombre, y todas las rondas van a una **cuenta compartida** de la mesa que todos ven. Cada ronda espera **60 segundos** antes de aparecer en el bar — la ventana de «Cancelar» de la mesa, que además hace de antispam — y luego suena y se acepta como cualquier pedido. Desde Pedidos, el botón **💶 Cobrar** cierra la cuenta de la mesa (marca todo como pagado/entregado). Sin geolocalización ni cuentas: la verificación real es el camarero, que ve «Mesa 5» y la tiene delante. Las rondas de mesa no envían aviso por WhatsApp (avisarían antes de acabar la ventana de cancelación); el panel abierto suena igual que siempre.
+
+> Migración: visita otra vez `/api/setup?password=TU_ADMIN_PASSWORD`.
+
 ## Repartidores (sin coste)
 
 Cada restaurante apunta a sus repartidores (nombre + WhatsApp) en su portal → **Ajustes**. En los pedidos de reparto aparece un botón por repartidor: al pulsarlo se abre WhatsApp con un enlace único de ese pedido. El repartidor ve la dirección (con botón a Google Maps), el teléfono del cliente, el contenido del pedido y **cuánto cobrar en efectivo**, y marca «He recogido» y «Entregado» — el estado se actualiza al momento para el cliente y el restaurante (nuevo estado `en_camino`). El enlace caduca a las 24h y no necesita cuenta ni app; reasignar el pedido a otro repartidor invalida el enlace anterior.

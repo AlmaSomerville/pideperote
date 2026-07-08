@@ -90,11 +90,10 @@ export async function PATCH(req) {
   // Rechazar un pedido PAGADO online = devolución automática (comisión incluida).
   // Para una ronda de mesa dentro de una cuenta pagada, se devuelve solo esa ronda.
   if (status === "rechazado" && order.paid_online && order.stripe_session_id && !order.refunded_at) {
+    // 1) La devolución en sí: si ESTO falla, el dinero sigue con el bar → avisar fuerte
     try {
       const [rest] = await sql`SELECT * FROM restaurants WHERE id = ${order.restaurant_id}`;
       await refundOrder(rest, order, order.total_cents);
-      await sql`UPDATE orders SET refunded_at = NOW() WHERE id = ${order.id}`;
-      return NextResponse.json({ ok: true, refunded: true });
     } catch (e) {
       console.error("refund error:", e.message);
       return NextResponse.json({
@@ -104,6 +103,14 @@ export async function PATCH(req) {
           "Pedido rechazado, pero NO se pudo devolver el dinero automáticamente. Devuélvelo desde tu panel de Stripe o avisa a PidePerote.",
       });
     }
+    // 2) Apuntarlo en la BD: si ESTO falla (p.ej. falta la migración), el dinero
+    //    YA está devuelto — no asustar al bar con un aviso de devolución fallida.
+    try {
+      await sql`UPDATE orders SET refunded_at = NOW() WHERE id = ${order.id}`;
+    } catch (e) {
+      console.error("refund stamp error (¿falta /api/setup?):", e.message);
+    }
+    return NextResponse.json({ ok: true, refunded: true });
   }
 
   return NextResponse.json({ ok: true });

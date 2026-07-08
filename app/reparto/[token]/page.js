@@ -92,10 +92,17 @@ export default function RepartoPage({ params }) {
           <span className={done ? "on" : ""}>3 · Entregado</span>
         </div>
 
-        <div className="courier-total">
-          💶 Cobrar {eur(o.total_cents)}
-          <small>en efectivo al entregar</small>
-        </div>
+        {o.paid_online ? (
+          <div className="courier-total paid">
+            ✅ YA PAGADO ONLINE
+            <small>no cobres nada al cliente</small>
+          </div>
+        ) : (
+          <div className="courier-total">
+            💶 Cobrar {eur(o.total_cents)}
+            <small>en efectivo al entregar</small>
+          </div>
+        )}
 
         <div className="courier-dest">
           <b>{o.customer_name}</b>

@@ -438,3 +438,10 @@ hr.sep { border: none; border-top: 1.5px solid var(--line); margin: 16px 0; }
   font-size: 13.5px;
 }
 .commission-row input { width: 74px; padding: 7px 9px; font-size: 14px; }
+
+/* ===================== PAGOS ONLINE ===================== */
+.courier-total.paid { color: #1c7a3d; background: #ecfbf0; border-color: #35b365; }
+.pay-pending {
+  background: #fdf6ec; border: 1.5px dashed var(--cta); border-radius: 12px;
+  padding: 14px; margin: 14px 0; font-size: 14.5px;
+}

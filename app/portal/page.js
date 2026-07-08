@@ -26,7 +26,7 @@ function Portal() {
     if (res.status === 401 || res.status === 403) return setNeedLogin(true);
     if (!res.ok) {
       // Admin sin restaurante elegido → al panel de admin
-      location.href = "/admin";
+      location.href = "/gaffer";
       return;
     }
     setData(await res.json());
@@ -45,7 +45,7 @@ function Portal() {
       <div className="topbar">
         <Link href="/" className="wordmark">pideperote<span className="dot">.</span></Link>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {data.role === "admin" && <Link href="/admin" className="tag">← Admin</Link>}
+          {data.role === "admin" && <Link href="/gaffer" className="tag">← Gaffer</Link>}
           <button
             className="btn ghost"
             onClick={async () => { await fetch("/api/portal/logout", { method: "POST" }); location.href = "/"; }}
@@ -71,6 +71,7 @@ function Portal() {
       {tab === "ajustes" && (
         <>
           <CouriersSection rid={r.id} />
+          <OnlinePaymentsSection r={r} reload={load} />
           <Settings data={data} reload={load} />
         </>
       )}
@@ -108,9 +109,6 @@ function LoginBox({ onDone }) {
         </div>
         {err && <p className="err">{err}</p>}
         <button className="btn green" onClick={login}>Entrar</button>
-        <p className="muted" style={{ marginTop: 12 }}>
-          ¿Eres el administrador? <Link href="/admin"><u>Entra aquí</u></Link>
-        </p>
       </div>
     </main>
   );
@@ -286,7 +284,7 @@ function Orders({ rid, rname }) {
             {o.type === "mesa" ? (
               <>
                 🍽️ Mesa <b>{o.table_label}</b> · {o.customer_name}
-                {o.paid_at && <span className="tag" style={{ marginLeft: 6, background: "#ccf5f5", color: "var(--green-dark)" }}>💶 Pagada</span>}
+                {o.paid_at && <span className="tag" style={{ marginLeft: 6, background: "#ccf5f5", color: "var(--green-dark)" }}>💶 Pagada{o.paid_online ? " online" : ""}</span>}
               </>
             ) : (
               <>
@@ -297,7 +295,15 @@ function Orders({ rid, rname }) {
             {o.notes && <div>📝 {o.notes}</div>}
           </div>
           <div className="totals big" style={{ marginTop: 6 }}>
-            <span>{o.type === "mesa" ? "Total de la ronda" : "Total (efectivo)"}</span><span>{eur(o.total_cents)}</span>
+            <span>
+              {o.type === "mesa" ? "Total de la ronda" : o.paid_online ? "Total" : "Total (efectivo)"}
+              {o.paid_online && o.type !== "mesa" && (
+                <span className="tag" style={{ marginLeft: 8, background: "#ccf5f5", color: "var(--green-dark)" }}>
+                  💶 PAGADO ONLINE — no cobrar
+                </span>
+              )}
+            </span>
+            <span>{eur(o.total_cents)}</span>
           </div>
           <CourierRow order={o} couriers={couriers} rname={rname} reload={load} />
           {o.status !== "entregado" && o.status !== "rechazado" && (
@@ -447,7 +453,9 @@ function CourierRow({ order, couriers, rname, reload }) {
       const msg =
         `🛵 Pedido ${order.code} — ${rname}\n` +
         `📍 ${order.address}\n` +
-        `💶 Cobrar ${eur(order.total_cents)} en efectivo\n\n` +
+        (order.paid_online
+          ? `✅ YA PAGADO ONLINE — no cobrar nada\n\n`
+          : `💶 Cobrar ${eur(order.total_cents)} en efectivo\n\n`) +
         `Dirección, teléfono del cliente y botones de entrega:\n` +
         `${location.origin}/reparto/${d.token}`;
       const url = `https://wa.me/${waNumber(c.phone)}?text=${encodeURIComponent(msg)}`;
@@ -533,6 +541,56 @@ function CouriersSection({ rid }) {
         <button className="btn small green" onClick={add}>Añadir</button>
       </div>
       {err && <p className="err">{err}</p>}
+    </div>
+  );
+}
+
+/* ---------------- PAGOS ONLINE ---------------- */
+
+function OnlinePaymentsSection({ r, reload }) {
+  const [busy, setBusy] = useState(false);
+  const connected = !!r.stripe_account_id;
+  const verified = !!r.stripe_charges_enabled;
+
+  async function toggle() {
+    setBusy(true);
+    await fetch("/api/portal/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rid: r.id, onlinePayments: !r.online_payments }),
+    });
+    await reload();
+    setBusy(false);
+  }
+
+  return (
+    <div className="panel">
+      <h3>Pagos online (tarjeta y Bizum)</h3>
+      {!connected && (
+        <p className="muted" style={{ margin: 0 }}>
+          Aún no está configurado el cobro online para tu bar. Habla con PidePerote para
+          darlo de alta (es gratis y se hace desde el móvil en unos minutos).
+        </p>
+      )}
+      {connected && !verified && (
+        <p className="muted" style={{ margin: 0 }}>
+          ⏳ Alta de Stripe en marcha. Si ya enviaste los datos, Stripe los está verificando;
+          si no, pide a PidePerote que te reenvíe el enlace de alta.
+        </p>
+      )}
+      {verified && (
+        <>
+          <label className="mod-opt" style={{ fontSize: 15 }}>
+            <input type="checkbox" checked={!!r.online_payments} disabled={busy} onChange={toggle} />
+            Aceptar pagos con tarjeta y Bizum
+          </label>
+          <p className="muted" style={{ margin: "6px 0 0" }}>
+            {r.online_payments
+              ? "✅ Tus clientes ya pueden pagar online al pedir (y las mesas, pagar su cuenta desde el móvil). Los pedidos pagados salen marcados con 💶 PAGADO — no cobres nada."
+              : "Tu cuenta de Stripe está lista. Activa el interruptor cuando quieras empezar a cobrar online. El dinero llega directo a tu cuenta bancaria vía Stripe."}
+          </p>
+        </>
+      )}
     </div>
   );
 }

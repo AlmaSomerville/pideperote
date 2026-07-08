@@ -83,6 +83,7 @@ async function doPatch(req) {
     delivery_fee_cents = ${cents(b.deliveryFeeCents, cur.delivery_fee_cents)},
     min_order_cents = ${cents(b.minOrderCents, cur.min_order_cents)},
     max_orders_per_hour = ${b.maxOrdersPerHour === undefined ? cur.max_orders_per_hour : Math.max(0, Math.min(500, Math.round(Number(b.maxOrdersPerHour) || 0)))},
+    online_payments = ${bool(b.onlinePayments, cur.online_payments)},
     whatsapp = ${whatsapp},
     portal_password = ${portalPassword}
     WHERE id = ${rid}`;

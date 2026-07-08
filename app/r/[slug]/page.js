@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 export default async function RestaurantPage({ params }) {
   const [rest] = await sql`SELECT id, slug, name, logo, cover, color, is_open, hours, schedule,
-    delivery, pickup, delivery_fee_cents, min_order_cents
+    delivery, pickup, delivery_fee_cents, min_order_cents,
+    stripe_account_id, stripe_charges_enabled, online_payments
     FROM restaurants WHERE slug = ${params.slug} AND active = TRUE`;
   if (!rest) notFound();
 
@@ -16,6 +17,8 @@ export default async function RestaurantPage({ params }) {
   rest.opensAt = open ? "" : nextOpeningText(rest);
   rest.is_open = open;
   rest.hours = hoursText(rest);
+  rest.online_ok = !!(rest.stripe_account_id && rest.stripe_charges_enabled && rest.online_payments);
+  delete rest.stripe_account_id; delete rest.stripe_charges_enabled; delete rest.online_payments;
   delete rest.schedule;
 
   const categories = await sql`SELECT id, name FROM categories WHERE restaurant_id = ${rest.id} ORDER BY sort, id`;

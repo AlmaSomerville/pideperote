@@ -14,7 +14,7 @@ function expired(o) {
 // GET /api/reparto/[token] — datos del pedido para el repartidor
 export async function GET(_req, { params }) {
   const [o] = await sql`SELECT o.id, o.code, o.status, o.customer_name, o.phone, o.address, o.notes,
-      o.total_cents, o.courier_name, o.assigned_at, o.picked_up_at, o.delivered_at,
+      o.total_cents, o.paid_online, o.courier_name, o.assigned_at, o.picked_up_at, o.delivered_at,
       r.name AS restaurant_name
     FROM orders o JOIN restaurants r ON r.id = o.restaurant_id
     WHERE o.delivery_token = ${params.token}`;

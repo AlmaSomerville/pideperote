@@ -26,6 +26,7 @@ export async function GET(req) {
     orders = await sql`SELECT * FROM orders WHERE restaurant_id = ${rid}
       AND created_at > NOW() - INTERVAL '48 hours'
       AND NOT (type = 'mesa' AND status = 'nuevo' AND created_at > NOW() - INTERVAL '60 seconds')
+      AND NOT (pay_method = 'online' AND paid_online = FALSE)
       ORDER BY (status IN ('entregado', 'rechazado')), created_at DESC LIMIT 200`;
   }
   const ids = orders.map((o) => o.id);

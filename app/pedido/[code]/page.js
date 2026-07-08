@@ -16,6 +16,7 @@ const STATUS_LABEL = {
 export default function OrderPage({ params }) {
   const [data, setData] = useState(null);
   const [notFound, setNotFound] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -65,13 +66,55 @@ export default function OrderPage({ params }) {
   if (!data) return <main className="wrap confirm-box"><p className="muted">Cargando...</p></main>;
 
   const { order, items } = data;
+  const unpaidOnline = order.pay_method === "online" && !order.paid_online;
+
+  async function pagarAhora() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: order.code }),
+      });
+      const d = await res.json();
+      if (res.ok && d.url) { location.href = d.url; return; }
+      alert(d.error || "No se pudo iniciar el pago.");
+    } catch { alert("Sin conexión. Prueba otra vez."); }
+    setBusy(false);
+  }
+
+  async function pagarEfectivo() {
+    if (!confirm("¿Prefieres pagar en efectivo? El restaurante recibirá tu pedido ahora.")) return;
+    setBusy(true);
+    try {
+      await fetch("/api/pay", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: order.code }),
+      });
+    } catch {}
+    location.href = `/pedido/${order.code}`;
+  }
   const rejected = order.status === "rechazado";
 
   return (
     <main className="wrap">
       <div className="confirm-box">
         <div className="big-icon">{rejected ? "😕" : order.status === "entregado" ? "✅" : order.status === "en_camino" ? "🛵" : "🍔"}</div>
-        <h1>{rejected ? "Pedido rechazado" : order.status === "entregado" ? "¡Pedido entregado!" : order.status === "en_camino" ? "Pedido en camino" : "¡Pedido enviado!"}</h1>
+        <h1>{rejected ? "Pedido rechazado" : unpaidOnline ? "Un último paso: el pago 💳" : order.status === "entregado" ? "¡Pedido entregado!" : order.status === "en_camino" ? "Pedido en camino" : "¡Pedido enviado!"}</h1>
+        {unpaidOnline && (
+          <div className="pay-pending">
+            <p style={{ margin: "0 0 10px" }}>
+              El restaurante <b>no verá tu pedido</b> hasta que completes el pago
+              (o elijas pagar en efectivo).
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+              <button className="btn" disabled={busy} onClick={pagarAhora}>💳 Pagar ahora</button>
+              <button className="btn secondary" disabled={busy} onClick={pagarEfectivo}>💵 Mejor en efectivo</button>
+            </div>
+          </div>
+        )}
+        {order.paid_online && <p className="tag" style={{ background: "#ccf5f5", color: "var(--green-dark)" }}>💶 Pagado online — no pagas nada al recibirlo</p>}
         <div className="code-chip">{order.code}</div>
         {order.scheduled_for && (
           <p className="status-now" style={{ marginBottom: 4 }}>
@@ -101,10 +144,12 @@ export default function OrderPage({ params }) {
           </div>
         ))}
         <div className="totals big" style={{ marginTop: 10 }}>
-          <span>Total (efectivo)</span><span>{eur(order.total_cents)}</span>
+          <span>{order.paid_online ? "Total (pagado ✅)" : "Total (efectivo)"}</span><span>{eur(order.total_cents)}</span>
         </div>
         <p className="muted">
-          {order.type === "reparto" ? "Pago en efectivo al repartidor." : "Pago en efectivo al recoger."}
+          {order.paid_online
+            ? "Pedido pagado online — no tienes que pagar nada más."
+            : order.type === "reparto" ? "Pago en efectivo al repartidor." : "Pago en efectivo al recoger."}
         </p>
       </div>
 

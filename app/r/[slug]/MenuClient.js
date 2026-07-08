@@ -13,6 +13,7 @@ export default function MenuClient({ restaurant, menu }) {
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
   const [when, setWhen] = useState("asap"); // asap | first | pick
+  const [pay, setPay] = useState("efectivo"); // efectivo | online
   const [avail, setAvail] = useState(null); // { asapOk, slots }
   const [slot, setSlot] = useState("");
   const [form, setForm] = useState({
@@ -81,6 +82,7 @@ export default function MenuClient({ restaurant, menu }) {
         body: JSON.stringify({
           restaurantId: restaurant.id,
           scheduledFor: when === "asap" ? undefined : Number(slot),
+          payMethod: pay,
           ...form,
           lines: cart.map((l) => ({
             itemId: l.itemId,
@@ -104,6 +106,18 @@ export default function MenuClient({ restaurant, menu }) {
           return;
         }
         throw new Error(data.error || "No se pudo enviar el pedido.");
+      }
+      if (pay === "online") {
+        // Ir directos a la pasarela; si falla, la página del pedido ofrece reintentar o efectivo
+        try {
+          const pres = await fetch("/api/pay", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: data.code }),
+          });
+          const pd = await pres.json();
+          if (pres.ok && pd.url) { location.href = pd.url; return; }
+        } catch {}
       }
       router.push(`/pedido/${data.code}`);
     } catch (e) {
@@ -298,12 +312,27 @@ export default function MenuClient({ restaurant, menu }) {
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
             />
           </div>
-          <div className="totals big"><span>Total (efectivo)</span><span>{eur(total)}</span></div>
+          {restaurant.online_ok && (
+            <>
+              <h3>¿Cómo quieres pagar?</h3>
+              <div className="pill-tabs">
+                <button className={pay === "efectivo" ? "on" : ""} onClick={() => setPay("efectivo")}>
+                  💵 Efectivo
+                </button>
+                <button className={pay === "online" ? "on" : ""} onClick={() => setPay("online")}>
+                  💳 Tarjeta o Bizum
+                </button>
+              </div>
+            </>
+          )}
+          <div className="totals big">
+            <span>{pay === "online" ? "Total" : "Total (efectivo)"}</span><span>{eur(total)}</span>
+          </div>
           {err && <p className="err">{err}</p>}
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <button className="btn secondary" onClick={() => setView("cart")}>Atrás</button>
             <button className="btn" disabled={sending} onClick={submitOrder}>
-              {sending ? "Enviando..." : "Hacer pedido"}
+              {sending ? "Enviando..." : pay === "online" ? "Continuar al pago" : "Hacer pedido"}
             </button>
           </div>
         </div>

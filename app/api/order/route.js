@@ -4,6 +4,7 @@ import { sendWhatsApp, orderMessage } from "@/lib/whatsapp";
 import { effectiveOpen, nextOpeningText } from "@/lib/hours";
 import { availability, candidateSlots, slotCapacity, SLOT_MS } from "@/lib/slots";
 import { priceLines, insertOrder } from "@/lib/order-utils";
+import { onlineOk } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,8 @@ export async function POST(req) {
   try {
     const body = await req.json();
     const { restaurantId, name, phone, address = "", notes = "", type, lines, scheduledFor } = body;
+    // 'online' solo si el bar realmente puede cobrar online; si no, efectivo.
+    // (Evita pedidos "online" invisibles para siempre en bares sin Stripe.)
     if (!restaurantId || !name?.trim() || !phone?.trim() || !Array.isArray(lines) || !lines.length)
       return NextResponse.json({ error: "Faltan datos del pedido." }, { status: 400 });
 
@@ -67,9 +70,11 @@ export async function POST(req) {
     const feeCents = orderType === "reparto" ? rest.delivery_fee_cents : 0;
     const total = subtotal + feeCents;
 
+    const payMethod = body.payMethod === "online" && onlineOk(rest) ? "online" : "efectivo";
     const order = await insertOrder(
       {
         restaurantId: rest.id,
+        payMethod,
         customerName: name.trim(),
         phone: phone.trim(),
         address: address.trim(),
@@ -82,7 +87,8 @@ export async function POST(req) {
       orderLines
     );
 
-    if (rest.whatsapp) {
+    // Los pedidos con pago online no avisan al bar todavia: se avisa desde el webhook al pagarse
+    if (rest.whatsapp && payMethod !== "online") {
       // No bloquear el pedido si WhatsApp falla
       sendWhatsApp(rest.whatsapp, orderMessage(order, orderLines, feeCents)).catch(() => {});
     }

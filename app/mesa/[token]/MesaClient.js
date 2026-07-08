@@ -23,10 +23,18 @@ export default function MesaClient({ restaurant, menu, token }) {
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
   const [bill, setBill] = useState(null); // { rounds, total, fetchedAt }
+  const [paying, setPaying] = useState(false);
+  const [payNote, setPayNote] = useState(""); // "ok" | "cancelado"
   const [, setTick] = useState(0); // re-render por segundo para la cuenta atrás
 
   useEffect(() => {
     try { setName(localStorage.getItem("pp_nombre") || ""); } catch {}
+    const p = new URLSearchParams(window.location.search).get("pago");
+    if (p) {
+      setPayNote(p);
+      setView("cuenta");
+      window.history.replaceState(null, "", window.location.pathname);
+    }
   }, []);
 
   const loadBill = useCallback(async () => {
@@ -102,6 +110,17 @@ export default function MesaClient({ restaurant, menu, token }) {
       setErr(e.message);
     }
     setSending(false);
+  }
+
+  async function pagarCuenta() {
+    setPaying(true);
+    try {
+      const res = await fetch(`/api/mesa/${token}`, { method: "PUT" });
+      const d = await res.json();
+      if (res.ok && d.url) { location.href = d.url; return; }
+      alert(d.error || "No se pudo iniciar el pago.");
+    } catch { alert("Sin conexión. Prueba otra vez."); }
+    setPaying(false);
   }
 
   async function cancelRound(id) {
@@ -209,6 +228,22 @@ export default function MesaClient({ restaurant, menu, token }) {
 
       {view === "cuenta" && (
         <div style={{ marginTop: 16 }}>
+          {payNote === "ok" && (
+            <div className="panel" style={{ borderLeft: "6px solid var(--green)" }}>
+              <b>✅ Cuenta pagada — ¡gracias!</b>
+              <p className="muted" style={{ margin: "4px 0 0" }}>
+                El bar ya lo ve como pagado. No tenéis que pagar nada al camarero.
+              </p>
+            </div>
+          )}
+          {payNote === "cancelado" && (
+            <div className="panel" style={{ borderLeft: "6px solid var(--cta)" }}>
+              <b>Pago cancelado</b>
+              <p className="muted" style={{ margin: "4px 0 0" }}>
+                No pasa nada — podéis intentarlo otra vez o pagar al camarero.
+              </p>
+            </div>
+          )}
           {!bill && <p className="muted">Cargando la cuenta...</p>}
           {bill && bill.rounds.length === 0 && (
             <div className="panel">
@@ -249,8 +284,23 @@ export default function MesaClient({ restaurant, menu, token }) {
             <div className="panel">
               <div className="totals big"><span>Total de la mesa</span><span>{eur(bill.total)}</span></div>
               <p className="muted" style={{ margin: "6px 0 0" }}>
-                Cuenta compartida de toda la mesa · se paga al camarero.
+                Cuenta compartida de toda la mesa{bill.online_ok ? "" : " · se paga al camarero"}.
               </p>
+              {bill.online_ok && bill.total >= 50 && (() => {
+                const inGrace = bill.rounds.some((r) => secondsLeft(r) > 0);
+                return (
+                  <>
+                    <button className="btn big" style={{ marginTop: 12 }} disabled={paying || inGrace} onClick={pagarCuenta}>
+                      💳 Pagar la cuenta ({eur(bill.total)})
+                    </button>
+                    <p className="muted" style={{ textAlign: "center", margin: "6px 0 0" }}>
+                      {inGrace
+                        ? "Podréis pagar cuando la última ronda vaya a cocina (menos de un minuto)."
+                        : "Tarjeta o Bizum · también podéis pagar al camarero como siempre."}
+                    </p>
+                  </>
+                );
+              })()}
             </div>
           )}
           <button className="btn secondary" style={{ marginTop: 4 }} onClick={() => setView("menu")}>

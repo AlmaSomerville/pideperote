@@ -430,3 +430,11 @@ hr.sep { border: none; border-top: 1.5px solid var(--line); margin: 16px 0; }
   width: 72px; height: 72px; border-radius: 8px;
   border: 1.5px solid var(--line); background: #fff; flex-shrink: 0;
 }
+
+/* ===================== ADMIN: COMISIÓN ===================== */
+.commission-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
+  font-size: 13.5px;
+}
+.commission-row input { width: 74px; padding: 7px 9px; font-size: 14px; }

@@ -137,9 +137,46 @@ function Restaurants({ restaurants, reload }) {
                 action(r.id, "delete");
             }}>Borrar</button>
           </div>
+          <CommissionRow r={r} reload={reload} />
         </div>
       ))}
     </>
+  );
+}
+
+function CommissionRow({ r, reload }) {
+  const [pct, setPct] = useState(String((r.commission_bps || 0) / 100));
+  const [cents, setCents] = useState(String(r.commission_fixed_cents || 0));
+  const [saving, setSaving] = useState(false);
+  const active = (r.commission_bps || 0) > 0 || (r.commission_fixed_cents || 0) > 0;
+  // Qué habría dado esta comisión con los pedidos de los últimos 30 días
+  const est = Math.round((Number(r.revenue_30d) * (r.commission_bps || 0)) / 10000) +
+    (r.commission_fixed_cents || 0) * Number(r.orders_30d);
+
+  async function save() {
+    setSaving(true);
+    await fetch("/api/admin/restaurants", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: r.id, action: "setCommission", pct: Number(pct) || 0, fixedCents: Number(cents) || 0 }),
+    });
+    await reload();
+    setSaving(false);
+  }
+
+  return (
+    <div className="commission-row">
+      <span className="muted">Comisión pagos online:</span>
+      <input type="number" min="0" max="30" step="0.1" value={pct} onChange={(e) => setPct(e.target.value)} />
+      <span>%</span>
+      <span className="muted">+</span>
+      <input type="number" min="0" max="500" step="1" value={cents} onChange={(e) => setCents(e.target.value)} />
+      <span>cts/pedido</span>
+      <button className="btn small green" disabled={saving} onClick={save}>{saving ? "..." : "Guardar"}</button>
+      <span className="muted">
+        {active ? <>con sus últimos 30 días ≈ <b>{eur(est)}</b></> : "0 = sin comisión"}
+      </span>
+    </div>
   );
 }
 

@@ -43,6 +43,13 @@ export async function PATCH(req) {
   const b = await req.json().catch(() => ({}));
   const id = Number(b.id);
   if (!id) return NextResponse.json({ error: "Falta id" }, { status: 400 });
+  if (b.action === "setCommission") {
+    // pct llega como porcentaje (2.5 = 2,5%) y se guarda en puntos básicos para no usar decimales
+    const bps = Math.max(0, Math.min(3000, Math.round(Number(b.pct || 0) * 100)));
+    const fixed = Math.max(0, Math.min(500, Math.round(Number(b.fixedCents || 0))));
+    await sql`UPDATE restaurants SET commission_bps = ${bps}, commission_fixed_cents = ${fixed} WHERE id = ${id}`;
+    return NextResponse.json({ ok: true });
+  }
   if (b.action === "toggleActive") {
     await sql`UPDATE restaurants SET active = NOT active WHERE id = ${id}`;
     return NextResponse.json({ ok: true });

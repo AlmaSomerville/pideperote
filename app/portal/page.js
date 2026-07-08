@@ -212,11 +212,19 @@ function Orders({ rid, rname }) {
   }, [load]);
 
   async function setStatus(orderId, status) {
-    await fetch("/api/portal/orders", {
+    if (status === "rechazado") {
+      const o = orders?.find((x) => x.id === orderId);
+      const extra = o?.paid_online ? " Se le devolverá el dinero automáticamente." : "";
+      if (!confirm(`¿Rechazar este pedido?${extra}`)) return;
+    }
+    const res = await fetch("/api/portal/orders", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ orderId, status }),
     });
+    const d = await res.json().catch(() => ({}));
+    if (d.refunded) alert("Pedido rechazado y dinero devuelto al cliente ✅");
+    if (d.warning) alert("⚠️ " + d.warning);
     load();
   }
 
@@ -300,6 +308,11 @@ function Orders({ rid, rname }) {
               {o.paid_online && o.type !== "mesa" && (
                 <span className="tag" style={{ marginLeft: 8, background: "#ccf5f5", color: "var(--green-dark)" }}>
                   💶 PAGADO ONLINE — no cobrar
+                </span>
+              )}
+              {o.refunded_at && (
+                <span className="tag" style={{ marginLeft: 8, background: "#fdecec", color: "var(--danger)" }}>
+                  ↩️ Devuelto
                 </span>
               )}
             </span>

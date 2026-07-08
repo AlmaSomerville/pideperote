@@ -114,7 +114,14 @@ export default function OrderPage({ params }) {
             </div>
           </div>
         )}
-        {order.paid_online && <p className="tag" style={{ background: "#ccf5f5", color: "var(--green-dark)" }}>💶 Pagado online — no pagas nada al recibirlo</p>}
+        {order.paid_online && !rejected && <p className="tag" style={{ background: "#ccf5f5", color: "var(--green-dark)" }}>💶 Pagado online — no pagas nada al recibirlo</p>}
+        {rejected && order.paid_online && (
+          <p className="tag" style={{ background: "#ccf5f5", color: "var(--green-dark)" }}>
+            {order.refunded_at
+              ? "↩️ Te hemos devuelto el dinero — suele tardar unos días en verse en tu banco"
+              : "El restaurante gestionará la devolución de tu pago"}
+          </p>
+        )}
         <div className="code-chip">{order.code}</div>
         {order.scheduled_for && (
           <p className="status-now" style={{ marginBottom: 4 }}>

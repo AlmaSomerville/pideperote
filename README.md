@@ -77,6 +77,8 @@ Flujo de alta: en `/gaffer` → «Conectar Stripe» crea la cuenta y copia un **
 
 Los pedidos con pago online **no se muestran al bar hasta estar pagados** (el webhook los destapa, suena el panel y llega el WhatsApp con «PAGADO ✅»). Si el cliente abandona el pago, su página de pedido ofrece «Pagar ahora» o «Mejor en efectivo» (que lo hace visible al bar al momento). Todo lo pagado sale marcado **💶 PAGADO — no cobrar** en panel, repartidor y cliente.
 
+**Devoluciones:** rechazar un pedido pagado online devuelve el dinero automáticamente (comisión de PidePerote incluida). Si el pedido rechazado es una ronda dentro de una cuenta de mesa ya pagada, se devuelve solo el importe de esa ronda. Todo «Rechazar» pide confirmación antes. Nota: Stripe no devuelve al bar sus gastos de procesamiento del cobro original.
+
 Variables de entorno (Vercel):
 - `STRIPE_SECRET_KEY` — clave secreta (sandbox `sk_test_...`, luego la live)
 - `STRIPE_WEBHOOK_SECRET` — firma del webhook (`whsec_...`)

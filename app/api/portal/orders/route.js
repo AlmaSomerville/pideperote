@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { sql } from "@/lib/db";
 import { getSession, requireRestaurant } from "@/lib/auth";
+import { refundOrder } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -80,10 +81,30 @@ export async function PATCH(req) {
   const { orderId, status } = await req.json().catch(() => ({}));
   if (!VALID_STATUS.includes(status))
     return NextResponse.json({ error: "Estado no válido" }, { status: 400 });
-  const [order] = await sql`SELECT id, restaurant_id FROM orders WHERE id = ${Number(orderId)}`;
+  const [order] = await sql`SELECT * FROM orders WHERE id = ${Number(orderId)}`;
   if (!order) return NextResponse.json({ error: "No existe" }, { status: 404 });
   if (!requireRestaurant(order.restaurant_id))
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   await sql`UPDATE orders SET status = ${status} WHERE id = ${order.id}`;
+
+  // Rechazar un pedido PAGADO online = devolución automática (comisión incluida).
+  // Para una ronda de mesa dentro de una cuenta pagada, se devuelve solo esa ronda.
+  if (status === "rechazado" && order.paid_online && order.stripe_session_id && !order.refunded_at) {
+    try {
+      const [rest] = await sql`SELECT * FROM restaurants WHERE id = ${order.restaurant_id}`;
+      await refundOrder(rest, order, order.total_cents);
+      await sql`UPDATE orders SET refunded_at = NOW() WHERE id = ${order.id}`;
+      return NextResponse.json({ ok: true, refunded: true });
+    } catch (e) {
+      console.error("refund error:", e.message);
+      return NextResponse.json({
+        ok: true,
+        refunded: false,
+        warning:
+          "Pedido rechazado, pero NO se pudo devolver el dinero automáticamente. Devuélvelo desde tu panel de Stripe o avisa a PidePerote.",
+      });
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }

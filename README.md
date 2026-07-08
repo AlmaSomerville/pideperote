@@ -69,6 +69,22 @@ Sin configurar nada, los restaurantes ven los pedidos en su panel (suena una ala
 4. **Importante**: Meta solo deja enviar texto libre dentro de la "ventana de 24h" (si el restaurante escribió al número hace <24h). Para producción crea una **plantilla** aprobada (ej. `nuevo_pedido` con una variable `{{1}}`) y añade `WHATSAPP_TEMPLATE=nuevo_pedido` en Vercel.
 5. El número de cada restaurante se pone desde `/admin` → su portal → Ajustes.
 
+## Pagos online (Stripe Connect: tarjeta y Bizum)
+
+PidePerote es la **plataforma** de Stripe Connect; cada bar es una **cuenta Express** conectada. Los cobros son *cargos directos* en la cuenta del bar (su nombre en el extracto del cliente, sus comisiones de Stripe) y PidePerote cobra su comisión como *application fee* — el % y céntimos por pedido que se configuran por bar en `/gaffer`.
+
+Flujo de alta: en `/gaffer` → «Conectar Stripe» crea la cuenta y copia un **enlace de alta estable** (`/conectar/xxxx`) para mandar por WhatsApp al dueño; el enlace genera un onboarding fresco de Stripe en cada visita (los enlaces nativos caducan en minutos). Con la cuenta verificada («Comprobar estado»), el bar activa el interruptor en su portal → Ajustes → **Pagos online**. Solo entonces sus clientes ven «💳 Tarjeta o Bizum» al pedir, y las mesas pueden «Pagar la cuenta» desde el móvil.
+
+Los pedidos con pago online **no se muestran al bar hasta estar pagados** (el webhook los destapa, suena el panel y llega el WhatsApp con «PAGADO ✅»). Si el cliente abandona el pago, su página de pedido ofrece «Pagar ahora» o «Mejor en efectivo» (que lo hace visible al bar al momento). Todo lo pagado sale marcado **💶 PAGADO — no cobrar** en panel, repartidor y cliente.
+
+Variables de entorno (Vercel):
+- `STRIPE_SECRET_KEY` — clave secreta (sandbox `sk_test_...`, luego la live)
+- `STRIPE_WEBHOOK_SECRET` — firma del webhook (`whsec_...`)
+
+Webhook: en el dashboard de Stripe crea un endpoint apuntando a `https://TU-DOMINIO/api/stripe/webhook`, escuchando **eventos de cuentas conectadas** («Listen to events on Connected accounts») con el evento `checkout.session.completed`.
+
+> Migración: visita otra vez `/api/setup?password=TU_ADMIN_PASSWORD`. El panel de administración ahora vive en **`/gaffer`** (antes `/admin`).
+
 ## Mesas con QR (sin coste)
 
 En el portal → **Mesas**, cada restaurante añade sus mesas y descarga un QR por mesa para imprimir. El QR lleva un token secreto (`/mesa/xK3n9dQpLw2f`): si se pierde o hay abuso, «↻ QR nuevo» lo regenera y el impreso viejo deja de valer. Los clientes escanean, piden con su nombre, y todas las rondas van a una **cuenta compartida** de la mesa que todos ven. Cada ronda espera **60 segundos** antes de aparecer en el bar — la ventana de «Cancelar» de la mesa, que además hace de antispam — y luego suena y se acepta como cualquier pedido. Desde Pedidos, el botón **💶 Cobrar** cierra la cuenta de la mesa (marca todo como pagado/entregado). Sin geolocalización ni cuentas: la verificación real es el camarero, que ve «Mesa 5» y la tiene delante. Las rondas de mesa no envían aviso por WhatsApp (avisarían antes de acabar la ventana de cancelación); el panel abierto suena igual que siempre.
